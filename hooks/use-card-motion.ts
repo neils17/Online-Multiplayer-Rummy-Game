@@ -16,12 +16,13 @@ type Gesture = {
   moved: boolean;
   settling: boolean;
   original: string[];
+  drawRequest?: Promise<Card | null>;
 };
 export function useCardMotion(
   order: string[],
   setOrder: React.Dispatch<React.SetStateAction<string[]>>,
   select: (id: string) => void,
-  onDraw: (source: 'draw' | 'open') => Promise<string | null>,
+  onDraw: (source: 'draw' | 'open') => Promise<Card | null>,
   onDiscard: (id: string) => Promise<boolean>,
   gameKey: string,
 ) {
@@ -106,7 +107,7 @@ export function useCardMotion(
       pointerId: e.pointerId,
       id,
       source,
-      face,
+      face: face ? { ...face } : null,
       origin,
       x: e.clientX,
       y: e.clientY,
@@ -117,6 +118,8 @@ export function useCardMotion(
       original: [...orderRef.current],
     };
     active.current = d;
+    // Lift the known discard face immediately, including before the drag threshold.
+    if (source === 'open') setDrag({ ...d });
     e.currentTarget.closest('main')?.setPointerCapture(e.pointerId);
   }
   function inHand(x: number, y: number) {
@@ -156,12 +159,25 @@ export function useCardMotion(
       d.moved = true;
       setDrag({ ...d });
       if (d.source === 'hand') select(d.id);
+      if (d.source === 'draw') {
+        // Commit the draw on lift: a revealed card can never be returned to the deck.
+        d.drawRequest = onDraw('draw').then((card) => {
+          if (card && active.current === d) {
+            d.face = card;
+            update(orderRef.current.filter((id) => id !== card.id));
+            setDrag({ ...d });
+          }
+          return card;
+        });
+      }
     }
     cancelAnimationFrame(frame.current);
     frame.current = requestAnimationFrame(paint);
     if (inHand(d.px, d.py)) {
       const index = nearest(d.px, d.py);
-      const next = orderRef.current.filter((id) => id !== d.id);
+      const next = orderRef.current.filter(
+        (id) => id !== d.id && !(d.source === 'draw' && id === d.face?.id),
+      );
       next.splice(Math.min(index, next.length), 0, d.id);
       update(next);
     } else if (d.source !== 'hand' && orderRef.current.includes(INCOMING))
@@ -230,21 +246,22 @@ export function useCardMotion(
       suppress.current = false;
     }, 500);
     paint();
-    if (cancel) {
+    if (cancel && d.source !== 'draw') {
       update(d.original);
       await nextFrame();
       await land(d.origin);
       return;
     }
     if (d.source !== 'hand') {
-      if (!inHand(d.px, d.py)) {
+      if (d.source !== 'draw' && !inHand(d.px, d.py)) {
         update(orderRef.current.filter((id) => id !== INCOMING));
         await land(d.origin);
         return;
       }
       if (!orderRef.current.includes(INCOMING))
         update([...orderRef.current, INCOMING]);
-      const id = await onDraw(d.source);
+      const card = await (d.drawRequest || onDraw(d.source));
+      const id = card?.id;
       if (active.current !== d) return;
       if (!id) {
         update(orderRef.current.filter((id) => id !== INCOMING));
@@ -252,6 +269,7 @@ export function useCardMotion(
         return;
       }
       d.id = id;
+      d.face = card;
       select(id);
       update(
         orderRef.current

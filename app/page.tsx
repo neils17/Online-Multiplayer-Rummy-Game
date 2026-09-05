@@ -171,7 +171,7 @@ export default function Home() {
       return (
         result.players[result.me].hand.find(
           (c) => !hand.some((old) => old.id === c.id),
-        )?.id || null
+        ) || null
       );
     },
     async (id) => {
@@ -460,22 +460,31 @@ export default function Home() {
                     className={`hand ${drag && drag.source !== 'hand' ? 'hand-receiving' : ''}`}
                     aria-label="Your hand"
                   >
-                    {cards.map((c, i) => (
-                      <button
-                        data-card={c.id}
-                        aria-label={`${rank(c.r)} ${suit[c.s]}${isWild(c, g.wild.r) ? ' wild joker' : ''}`}
-                        aria-pressed={selected === c.id}
-                        key={c.id}
-                        className={`playing-card hand-card ${c.s % 2 ? 'red' : ''} ${selected === c.id ? 'selected' : ''} ${drag?.id === c.id ? 'drag-source' : ''} ${c.id === INCOMING ? 'incoming-slot' : ''}`}
-                        onPointerDown={(e) => {
-                          if (c.id !== INCOMING)
-                            motion.start(e, 'hand', c.id, c);
-                        }}
-                        onClick={() => setSelected(c.id)}
-                      >
-                        <Face c={c} w={g.wild.r} />
-                      </button>
-                    ))}
+                    {cards
+                      .filter(
+                        (c) =>
+                          !(
+                            drag?.source === 'draw' &&
+                            drag.id === INCOMING &&
+                            c.id === drag.face?.id
+                          ),
+                      )
+                      .map((c, i) => (
+                        <button
+                          data-card={c.id}
+                          aria-label={`${rank(c.r)} ${suit[c.s]}${isWild(c, g.wild.r) ? ' wild joker' : ''}`}
+                          aria-pressed={selected === c.id}
+                          key={c.id}
+                          className={`playing-card hand-card ${c.s % 2 ? 'red' : ''} ${selected === c.id ? 'selected' : ''} ${drag?.id === c.id ? 'drag-source' : ''} ${c.id === INCOMING ? 'incoming-slot' : ''}`}
+                          onPointerDown={(e) => {
+                            if (c.id !== INCOMING)
+                              motion.start(e, 'hand', c.id, c);
+                          }}
+                          onClick={() => setSelected(c.id)}
+                        >
+                          <Face c={c} w={g.wild.r} />
+                        </button>
+                      ))}
                   </div>
                   <div className="hand-hint">
                     Drag cards to rearrange · Drag from either pile into your

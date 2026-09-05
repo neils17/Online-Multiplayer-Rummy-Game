@@ -506,7 +506,7 @@ button.quiet:hover {
   margin-left: 0;
 }
 .hand-card.selected {
-  transform: translateY(-17px);
+  transform: none;
   box-shadow:
     0 0 0 2px #e4bd75,
     0 10px 22px #0006;
@@ -760,7 +760,7 @@ button.quiet:hover {
     bottom: 3px;
   }
   .hand-card.selected {
-    transform: translateY(-12px);
+    transform: none;
   }
   .hand-card.dragging {
     z-index: 100;

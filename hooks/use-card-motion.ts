@@ -21,7 +21,7 @@ type Gesture = {
 export function useCardMotion(
   order: string[],
   setOrder: React.Dispatch<React.SetStateAction<string[]>>,
-  select: (id: string) => void,
+  select: (id: string | null) => void,
   onDraw: (source: 'draw' | 'open') => Promise<Card | null>,
   onDiscard: (id: string) => Promise<boolean>,
   gameKey: string,
@@ -185,6 +185,8 @@ export function useCardMotion(
   }
   function cleanup() {
     cancelAnimationFrame(frame.current);
+    // A completed drag returns to the normal hand layer, not the selected layer.
+    if (active.current?.moved) select(null);
     active.current = null;
     setDrag(null);
   }

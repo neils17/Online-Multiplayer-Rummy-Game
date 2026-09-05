@@ -508,9 +508,8 @@ button.quiet:hover {
 .hand-card.selected {
   transform: none;
   box-shadow:
-    0 0 0 2px #e4bd75,
-    0 10px 22px #0006;
-  z-index: 2;
+    inset 0 0 0 2px #e4bd75,
+    0 6px 12px #0004;
 }
 .hand-card.dragging {
   z-index: 100;
@@ -520,6 +519,7 @@ button.quiet:hover {
   animation: none;
 }
 .hand-card:hover {
+  transform: none;
   filter: none;
 }
 .hand-hint {

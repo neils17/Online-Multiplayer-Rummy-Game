@@ -8,13 +8,14 @@ import {
   TableCell,
   TableFooter,
 } from '@/components/ui/table';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { useCardMotion, INCOMING } from '@/hooks/use-card-motion';
 import { type Card, rank, suit, isWild } from '@/lib/game';
 type View = {
   code: string;
@@ -66,16 +67,8 @@ export default function Home() {
   const [rules, setRules] = useState(false);
   const [scores, setScores] = useState(false);
   const [confirm, setConfirm] = useState('');
-  const [drag, setDrag] = useState<{
-    id: string;
-    x: number;
-    y: number;
-    dx: number;
-    dy: number;
-  } | null>(null);
-  const dragRef = useRef<typeof drag>(null);
   const inFlight = useRef(false);
-  const positions = useRef(new Map<string, DOMRect>());
+  const requestEpoch = useRef(0);
   useEffect(() => {
     try {
       const saved = localStorage.getItem('mehfil-seat');
@@ -87,10 +80,12 @@ export default function Home() {
   async function call(action: string, cardId?: string, current = seat) {
     if (action !== 'poll' && inFlight.current) return;
     if (action !== 'poll') {
+      requestEpoch.current++;
       inFlight.current = true;
       setBusy(true);
       setError('');
     }
+    const epoch = requestEpoch.current;
     try {
       const response = await fetch('/api/game', {
         method: 'POST',
@@ -109,6 +104,7 @@ export default function Home() {
         error?: string;
       };
       if (!response.ok) throw Error(data.error || 'Could not reach the table.');
+      if (action === 'poll' && epoch !== requestEpoch.current) return false;
       setG(data.game);
       setConnection(true);
       if (action === 'create' || action === 'join') {
@@ -118,7 +114,7 @@ export default function Home() {
         localStorage.setItem('mehfil-name', name);
       }
       if (action === 'discard' || action === 'declare') setSelected(null);
-      return true;
+      return data.game;
     } catch (e) {
       if (action === 'poll') setConnection(false);
       else
@@ -151,90 +147,43 @@ export default function Home() {
   const handKey = hand.map((c) => c.id).join(',');
   useEffect(() => {
     setOrder((old) => [
-      ...old.filter((id) => hand.some((c) => c.id === id)),
+      ...old.filter((id) => id === INCOMING || hand.some((c) => c.id === id)),
       ...hand.filter((c) => !old.includes(c.id)).map((c) => c.id),
     ]);
   }, [handKey]);
   const cards = order
-    .map((id) => hand.find((c) => c.id === id))
+    .map((id) =>
+      id === INCOMING
+        ? { id: INCOMING, r: 0, s: 0 }
+        : hand.find((c) => c.id === id),
+    )
     .filter(Boolean) as Card[];
   const mine = !!g && g.turn === g.me && g.status === 'playing';
   const mayDiscard = mine && g?.phase === 'discard';
   const other = g?.players[1 - g.me];
-  useLayoutEffect(() => {
-    const next = new Map<string, DOMRect>();
-    document.querySelectorAll<HTMLElement>('[data-card]').forEach((el) => {
-      const id = el.dataset.card!;
-      const r = el.getBoundingClientRect();
-      const old = positions.current.get(id);
-      if (
-        old &&
-        !dragRef.current &&
-        !matchMedia('(prefers-reduced-motion: reduce)').matches
-      ) {
-        const dx = old.left - r.left,
-          dy = old.top - r.top;
-        if (dx || dy)
-          el.animate([{ translate: `${dx}px ${dy}px` }, { translate: '0 0' }], {
-            duration: 240,
-            easing: 'cubic-bezier(.2,.8,.2,1)',
-          });
-      }
-      next.set(id, r);
-    });
-    positions.current = next;
-  }, [order]);
-  function pointerDown(e: React.PointerEvent<HTMLButtonElement>, id: string) {
-    if (e.button !== 0) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
-    const d = { id, x: e.clientX, y: e.clientY, dx: 0, dy: 0 };
-    dragRef.current = d;
-    setDrag(d);
-    setSelected(id);
-  }
-  function pointerMove(e: React.PointerEvent<HTMLButtonElement>) {
-    const d = dragRef.current;
-    if (!d) return;
-    const next = { ...d, dx: e.clientX - d.x, dy: e.clientY - d.y };
-    dragRef.current = next;
-    setDrag(next);
-  }
-  function pointerUp(e: React.PointerEvent<HTMLButtonElement>) {
-    const d = dragRef.current;
-    if (!d) return;
-    dragRef.current = null;
-    setDrag(null);
-    if (Math.hypot(d.dx, d.dy) < 8) return;
-    const target = document
-      .elementFromPoint(e.clientX, e.clientY)
-      ?.closest('[data-drop]');
-    if (target?.getAttribute('data-drop') === 'discard') {
-      if (mayDiscard) void call('discard', d.id);
-      else setError('Draw a card on your turn before discarding.');
-      return;
-    }
-    const els = [...document.querySelectorAll<HTMLElement>('[data-card]')];
-    let nearest = els[0],
-      distance = Infinity;
-    for (const el of els) {
-      const r = el.getBoundingClientRect();
-      const dd = Math.hypot(
-        r.left + r.width / 2 - e.clientX,
-        r.top + r.height / 2 - e.clientY,
+  const motion = useCardMotion(
+    order,
+    setOrder,
+    setSelected,
+    async (source) => {
+      const result = await call(source);
+      if (!result) return null;
+      return (
+        result.players[result.me].hand.find(
+          (c) => !hand.some((old) => old.id === c.id),
+        )?.id || null
       );
-      if (dd < distance) {
-        nearest = el;
-        distance = dd;
+    },
+    async (id) => {
+      if (!mayDiscard) {
+        setError('Draw a card on your turn before discarding.');
+        return false;
       }
-    }
-    const id = nearest?.dataset.card;
-    if (id && id !== d.id)
-      setOrder((old) => {
-        const a = old.filter((x) => x !== d.id);
-        a.splice(old.indexOf(id), 0, d.id);
-        return a;
-      });
-  }
+      return !!(await call('discard', id));
+    },
+    `${g?.code}/${g?.round}/${g?.status}`,
+  );
+  const drag = motion.drag;
   function leave() {
     localStorage.removeItem('mehfil-seat');
     setSeat(null);
@@ -253,7 +202,28 @@ export default function Home() {
     }
   }
   return (
-    <main className="shell">
+    <main
+      className="shell"
+      onPointerMove={motion.move}
+      onPointerUp={(e) => void motion.end(e)}
+      onPointerCancel={(e) => void motion.end(e, true)}
+      onClickCapture={motion.click}
+    >
+      {drag && (
+        <div
+          ref={motion.ghost}
+          className={`playing-card drag-ghost ${drag.face?.s && drag.face.s % 2 ? 'red' : ''} ${drag.source === 'draw' && !drag.face ? 'card-back deck' : ''}`}
+          style={{
+            left: drag.origin.left,
+            top: drag.origin.top,
+            width: drag.origin.width,
+            height: drag.origin.height,
+          }}
+          aria-hidden="true"
+        >
+          {drag.face ? <Face c={drag.face} w={g?.wild.r} /> : <b>♠</b>}
+        </div>
+      )}
       <header>
         <div className="brand">
           ♠ <span>mehfil</span>
@@ -423,6 +393,9 @@ export default function Home() {
                   <button
                     className="pile-item pile-button"
                     disabled={!mine || g.phase !== 'draw' || busy}
+                    onPointerDown={(e) =>
+                      motion.start(e, 'draw', INCOMING, null)
+                    }
                     onClick={() => call('draw')}
                   >
                     <div className="card-back deck">♠</div>
@@ -432,6 +405,15 @@ export default function Home() {
                   </button>
                   <button
                     data-drop="discard"
+                    onPointerDown={(e) => {
+                      if (
+                        mine &&
+                        g.phase === 'draw' &&
+                        !busy &&
+                        !isWild(g.pile[0], g.wild.r)
+                      )
+                        motion.start(e, 'open', INCOMING, g.pile[0]);
+                    }}
                     className={`pile-item pile-button discard ${drag && mayDiscard ? 'drop-ready' : ''}`}
                     onClick={() =>
                       mayDiscard && selected
@@ -463,7 +445,7 @@ export default function Home() {
                     <button
                       className="quiet"
                       onClick={() =>
-                        setOrder(
+                        motion.sort(
                           [...hand]
                             .sort((a, b) => a.s - b.s || a.r - b.r)
                             .map((c) => c.id),
@@ -473,29 +455,21 @@ export default function Home() {
                       ⇄ Sort by suit
                     </button>
                   </div>
-                  <div className="hand">
+                  <div
+                    ref={motion.hand}
+                    className={`hand ${drag && drag.source !== 'hand' ? 'hand-receiving' : ''}`}
+                    aria-label="Your hand"
+                  >
                     {cards.map((c, i) => (
                       <button
                         data-card={c.id}
                         aria-label={`${rank(c.r)} ${suit[c.s]}${isWild(c, g.wild.r) ? ' wild joker' : ''}`}
                         aria-pressed={selected === c.id}
                         key={c.id}
-                        className={`playing-card hand-card ${c.s % 2 ? 'red' : ''} ${selected === c.id ? 'selected' : ''} ${drag?.id === c.id ? 'dragging' : ''}`}
-                        style={
-                          {
-                            '--i': i,
-                            transform:
-                              drag?.id === c.id
-                                ? `translate(${drag.dx}px,${drag.dy}px) rotate(${drag.dx / 30}deg)`
-                                : undefined,
-                          } as React.CSSProperties
-                        }
-                        onPointerDown={(e) => pointerDown(e, c.id)}
-                        onPointerMove={pointerMove}
-                        onPointerUp={pointerUp}
-                        onPointerCancel={() => {
-                          dragRef.current = null;
-                          setDrag(null);
+                        className={`playing-card hand-card ${c.s % 2 ? 'red' : ''} ${selected === c.id ? 'selected' : ''} ${drag?.id === c.id ? 'drag-source' : ''} ${c.id === INCOMING ? 'incoming-slot' : ''}`}
+                        onPointerDown={(e) => {
+                          if (c.id !== INCOMING)
+                            motion.start(e, 'hand', c.id, c);
                         }}
                         onClick={() => setSelected(c.id)}
                       >
@@ -504,8 +478,8 @@ export default function Home() {
                     ))}
                   </div>
                   <div className="hand-hint">
-                    Drag to arrange · Drag to the discard pile, or select a card
-                    below
+                    Drag cards to rearrange · Drag from either pile into your
+                    hand
                   </div>
                   <div className="actions">
                     <button

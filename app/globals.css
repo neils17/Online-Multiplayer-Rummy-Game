@@ -854,3 +854,72 @@ button.quiet:hover {
     font-size: 16px;
   }
 }
+/* The lifted card lives above the table; its slot remains in the hand. */
+.hand-card {
+  animation: none;
+  cursor: grab;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.hand-card:active {
+  cursor: grabbing;
+}
+.hand-card.drag-source {
+  opacity: 0;
+  pointer-events: none;
+  transition: none;
+}
+.hand-card.incoming-slot {
+  color: transparent;
+  background: #e7c48914;
+  border: 1px dashed #e7c489a0;
+  box-shadow: inset 0 0 20px #e7c4890a;
+  transform: none;
+  pointer-events: none;
+}
+.incoming-slot > * {
+  visibility: hidden;
+}
+.drag-ghost.playing-card {
+  position: fixed;
+  margin: 0;
+  z-index: 1000;
+  pointer-events: none;
+  transform-origin: top left;
+  will-change: transform;
+  box-shadow:
+    0 22px 42px #0006,
+    0 3px 8px #0003;
+  transition: none;
+  animation: none;
+  isolation: isolate;
+}
+.drag-ghost.deck {
+  display: block;
+}
+.hand {
+  border-radius: 16px;
+  transition:
+    background 0.2s,
+    box-shadow 0.2s;
+}
+.hand-receiving {
+  background: #dfb87308;
+  box-shadow: 0 0 0 1px #dfb87330;
+}
+.pile-button {
+  touch-action: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.pile-button:not(:disabled) {
+  cursor: grab;
+}
+@media (max-width: 750px) {
+  .drag-ghost.playing-card {
+    font-size: 16px;
+  }
+  .drag-ghost.playing-card b {
+    font-size: 28px;
+  }
+}

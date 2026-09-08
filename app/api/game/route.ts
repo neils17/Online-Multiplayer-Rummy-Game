@@ -2,6 +2,7 @@ import { getDb } from '@/db';
 import { rooms } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { act, deal, type Game } from '@/lib/game';
+import { advanceBot, scheduleBot } from '@/lib/bot';
 const reply = (data: unknown, status = 200) =>
   Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
 function view(g: Game, i: number, code: string) {
@@ -9,10 +10,12 @@ function view(g: Game, i: number, code: string) {
     code,
     ...g,
     deck: undefined,
+    botAt: undefined,
     remaining: g.deck.length,
     pile: g.pile.slice(-1),
     players: g.players.map((p, j) => ({
       name: p.name,
+      bot: !!p.bot,
       score: p.score,
       count: p.hand.length,
       hand: i === j || g.status === 'ended' ? p.hand : [],
@@ -35,7 +38,7 @@ export async function POST(req: Request) {
       String(b.name || 'Player')
         .trim()
         .slice(0, 20) || 'Player';
-    if (b.action === 'create') {
+    if (b.action === 'create' || b.action === 'practice') {
       const code = crypto
         .randomUUID()
         .replaceAll('-', '')
@@ -55,6 +58,18 @@ export async function POST(req: Request) {
         message: 'Waiting for your friend.',
         picked: null,
       };
+      if (b.action === 'practice') {
+        g.players.push({
+          name: 'Mehfil Bot',
+          token: crypto.randomUUID(),
+          hand: [],
+          score: 0,
+          draws: 0,
+          bot: true,
+        });
+        deal(g);
+        scheduleBot(g);
+      }
       await db.insert(rooms).values({ code, state: JSON.stringify(g) });
       return reply({ token, game: view(g, 0, code) });
     }
@@ -65,6 +80,7 @@ export async function POST(req: Request) {
     const g: Game = JSON.parse(row.state);
     let i = g.players.findIndex((p) => p.token === b.token);
     let token = b.token;
+    let botMoved = false;
     if (b.action === 'join' && i < 0) {
       if (g.players.length === 2)
         return reply({ error: 'This table already has two players.' }, 409);
@@ -82,8 +98,10 @@ export async function POST(req: Request) {
           403,
         );
       if (b.action !== 'poll') act(g, i, b.action, b.cardId);
+      else botMoved = advanceBot(g);
     }
-    if (b.action !== 'poll') {
+    if (b.action !== 'poll') scheduleBot(g);
+    if (b.action !== 'poll' || botMoved) {
       const changed = await db
         .update(rooms)
         .set({ state: JSON.stringify(g), version: row.version + 1 })

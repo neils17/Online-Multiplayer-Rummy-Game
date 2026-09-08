@@ -923,3 +923,27 @@ button.quiet:hover {
     font-size: 28px;
   }
 }
+.practice-option {
+  display: grid;
+  gap: 10px;
+  margin: 20px 0 18px;
+  padding-top: 18px;
+  border-top: 1px solid #ffffff20;
+}
+.practice-option > span {
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: #b9cdbf;
+}
+.practice-option button {
+  width: 100%;
+  min-height: 48px;
+}
+.practice-label {
+  display: flex;
+  align-items: center;
+  padding: 9px 12px;
+  color: #dfb873;
+  font-size: 12px;
+  letter-spacing: 1.5px;
+}

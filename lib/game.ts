@@ -1,5 +1,6 @@
 export type Card = { id: string; r: number; s: number };
 export type Player = {
+  bot?: boolean;
   name: string;
   token: string;
   hand: Card[];
@@ -7,6 +8,7 @@ export type Player = {
   draws: number;
 };
 export type Game = {
+  botAt?: number;
   players: Player[];
   deck: Card[];
   pile: Card[];

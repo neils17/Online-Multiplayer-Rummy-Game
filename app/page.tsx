@@ -21,6 +21,7 @@ type View = {
   code: string;
   players: {
     name: string;
+    bot?: boolean;
     score: number;
     count: number;
     hand: Card[];
@@ -107,7 +108,7 @@ export default function Home() {
       if (action === 'poll' && epoch !== requestEpoch.current) return false;
       setG(data.game);
       setConnection(true);
-      if (action === 'create' || action === 'join') {
+      if (action === 'create' || action === 'join' || action === 'practice') {
         const s = { code: data.game.code, token: data.token };
         setSeat(s);
         localStorage.setItem('mehfil-seat', JSON.stringify(s));
@@ -282,7 +283,18 @@ export default function Home() {
                   Join
                 </button>
               </form>
-              <small>2 players · Private rooms · Just for fun</small>
+              <div className="practice-option">
+                <span>OR PRACTISE SOLO</span>
+                <button
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() => call('practice', undefined, null)}
+                >
+                  ♧ Play against bot
+                </button>
+                <small>No invite needed. Same rules, your own pace.</small>
+              </div>
+              <small>Private tables · Just for fun</small>
               {seat && (
                 <button className="quiet" onClick={leave}>
                   Clear saved seat
@@ -306,9 +318,13 @@ export default function Home() {
         ) : (
           <>
             <div className="table-top">
-              <button className="quiet room" onClick={invite}>
-                ROOM {g.code} <span>↗ Invite</span>
-              </button>
+              {other?.bot ? (
+                <span className="practice-label">♧ PRACTICE TABLE</span>
+              ) : (
+                <button className="quiet room" onClick={invite}>
+                  ROOM {g.code} <span>↗ Invite</span>
+                </button>
+              )}
               <button className="quiet" onClick={() => setScores(true)}>
                 Scores{' '}
                 <strong>
@@ -351,7 +367,11 @@ export default function Home() {
                       {g.status === 'ended'
                         ? 'Round complete'
                         : !mine
-                          ? 'Playing…'
+                          ? other?.bot
+                            ? g.phase === 'draw'
+                              ? 'Drawing…'
+                              : 'Choosing a discard…'
+                            : 'Playing…'
                           : `${other?.count} cards`}
                     </small>
                   </div>

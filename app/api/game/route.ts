@@ -5,9 +5,10 @@ import { act, deal, type Game } from '@/lib/game';
 import { advanceBot, scheduleBot } from '@/lib/bot';
 const reply = (data: unknown, status = 200) =>
   Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
-function view(g: Game, i: number, code: string) {
+function view(g: Game, i: number, code: string, revision = 0) {
   return {
     code,
+    revision,
     ...g,
     deck: undefined,
     botAt: undefined,
@@ -107,13 +108,34 @@ export async function POST(req: Request) {
         .set({ state: JSON.stringify(g), version: row.version + 1 })
         .where(and(eq(rooms.code, code), eq(rooms.version, row.version)))
         .returning({ code: rooms.code });
-      if (!changed.length)
+      if (!changed.length) {
+        if (b.action === 'poll') {
+          const latest = await db
+            .select()
+            .from(rooms)
+            .where(eq(rooms.code, code))
+            .get();
+          if (latest)
+            return reply({
+              token,
+              game: view(JSON.parse(latest.state), i, code, latest.version),
+            });
+        }
         return reply(
           { error: 'The table just changed. Please try again.' },
           409,
         );
+      }
     }
-    return reply({ token, game: view(g, i, code) });
+    return reply({
+      token,
+      game: view(
+        g,
+        i,
+        code,
+        row.version + (b.action !== 'poll' || botMoved ? 1 : 0),
+      ),
+    });
   } catch (e) {
     return reply(
       {

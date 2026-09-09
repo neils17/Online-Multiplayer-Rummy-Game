@@ -8,16 +8,19 @@ import {
   TableCell,
   TableFooter,
 } from '@/components/ui/table';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   Dialog,
   DialogContent,
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { useCardFlight } from '@/hooks/use-card-flight';
+import { opponentTransition } from '@/lib/transition';
 import { useCardMotion, INCOMING } from '@/hooks/use-card-motion';
 import { type Card, rank, suit, isWild } from '@/lib/game';
 type View = {
+  revision?: number;
   code: string;
   players: {
     name: string;
@@ -70,6 +73,135 @@ export default function Home() {
   const [confirm, setConfirm] = useState('');
   const inFlight = useRef(false);
   const requestEpoch = useRef(0);
+  const gRef = useRef<View | null>(null);
+  const motionRef = useRef<ReturnType<typeof useCardMotion> | null>(null);
+  const flightMotion = useCardFlight();
+  const presenting = useRef(false);
+  const opponentBefore = useRef<DOMRect[]>([]);
+  const opponentAnimations = useRef<Animation[]>([]);
+  function commit(next: View) {
+    motionRef.current?.capture();
+    opponentBefore.current = Array.from(
+      document.querySelectorAll<HTMLElement>('[data-opponent-card]'),
+    ).map((el) => el.getBoundingClientRect());
+    gRef.current = next;
+    setG(next);
+  }
+  async function receive(
+    next: View,
+    action: string,
+    cardId?: string,
+    animate?: () => Promise<void>,
+  ) {
+    const previous = gRef.current;
+    if (
+      previous?.code === next.code &&
+      previous.revision !== undefined &&
+      previous.revision >= (next.revision ?? -1)
+    )
+      return;
+    if (animate) {
+      await animate();
+      commit(next);
+      return;
+    }
+    const event = previous ? opponentTransition(previous, next) : null;
+    if (event) {
+      const source =
+        event.kind === 'draw'
+          ? document.querySelector<HTMLElement>(
+              event.open ? '[data-discard-card]' : '[data-draw-card]',
+            )
+          : document.querySelector<HTMLElement>(
+              '[data-opponent-card]:last-child',
+            );
+      const target = document.querySelector<HTMLElement>(
+        event.kind === 'draw'
+          ? '[data-opponent-card]:last-child'
+          : '[data-discard-card]',
+      );
+      if (source && target) {
+        presenting.current = true;
+        setBusy(true);
+        try {
+          await flightMotion.fly(
+            source.getBoundingClientRect(),
+            event.kind === 'draw'
+              ? (() => {
+                  const r = target.getBoundingClientRect();
+                  const step =
+                    r.width +
+                    parseFloat(getComputedStyle(target).marginLeft || '0');
+                  return new DOMRect(
+                    r.left + step / 2,
+                    r.top,
+                    r.width,
+                    r.height,
+                  );
+                })()
+              : target.getBoundingClientRect(),
+            event.card,
+            event.label,
+            () => commit(next),
+            event.kind === 'discard' ? source : null,
+          );
+        } finally {
+          presenting.current = false;
+          setBusy(false);
+        }
+        return;
+      }
+    }
+    if (
+      previous &&
+      previous.round === next.round &&
+      !motionRef.current?.isDragging()
+    ) {
+      if ((action === 'discard' || action === 'declare') && cardId) {
+        const source = Array.from(
+          document.querySelectorAll<HTMLElement>('[data-card]'),
+        ).find((el) => el.dataset.card === cardId);
+        const target = document.querySelector<HTMLElement>(
+          '[data-discard-card]',
+        );
+        const card = previous.players[previous.me].hand.find(
+          (c) => c.id === cardId,
+        );
+        if (source && target && card) {
+          await flightMotion.fly(
+            source.getBoundingClientRect(),
+            target.getBoundingClientRect(),
+            card,
+            'Discarding your card',
+            () => commit(next),
+            source,
+          );
+          return;
+        }
+      }
+      if (action === 'draw' || action === 'open') {
+        const card = next.players[next.me].hand.find(
+          (c) =>
+            !previous.players[previous.me].hand.some((old) => old.id === c.id),
+        );
+        const source = document.querySelector<HTMLElement>(
+          action === 'draw' ? '[data-draw-card]' : '[data-discard-card]',
+        );
+        if (card && source) {
+          const from = source.getBoundingClientRect();
+          const to = await motionRef.current?.reserve();
+          if (to) {
+            await flightMotion.fly(from, to, card, 'Drawing your card', () => {
+              motionRef.current?.fill(card.id);
+              commit(next);
+            });
+            return;
+          }
+        }
+      }
+    }
+    commit(next);
+  }
   useEffect(() => {
     try {
       const saved = localStorage.getItem('mehfil-seat');
@@ -78,7 +210,13 @@ export default function Home() {
       setCode(new URLSearchParams(location.search).get('room') || '');
     } catch {}
   }, []);
-  async function call(action: string, cardId?: string, current = seat) {
+  async function call(
+    action: string,
+    cardId?: string,
+    current = seat,
+    animate?: () => Promise<void>,
+  ) {
+    if (presenting.current) return;
     if (action !== 'poll' && inFlight.current) return;
     if (action !== 'poll') {
       requestEpoch.current++;
@@ -106,7 +244,7 @@ export default function Home() {
       };
       if (!response.ok) throw Error(data.error || 'Could not reach the table.');
       if (action === 'poll' && epoch !== requestEpoch.current) return false;
-      setG(data.game);
+      await receive(data.game, action, cardId, animate);
       setConnection(true);
       if (action === 'create' || action === 'join' || action === 'practice') {
         const s = { code: data.game.code, token: data.token };
@@ -146,7 +284,7 @@ export default function Home() {
   }, [seat]);
   const hand = g?.players[g.me]?.hand || [];
   const handKey = hand.map((c) => c.id).join(',');
-  useEffect(() => {
+  useLayoutEffect(() => {
     setOrder((old) => [
       ...old.filter((id) => id === INCOMING || hand.some((c) => c.id === id)),
       ...hand.filter((c) => !old.includes(c.id)).map((c) => c.id),
@@ -162,6 +300,30 @@ export default function Home() {
   const mine = !!g && g.turn === g.me && g.status === 'playing';
   const mayDiscard = mine && g?.phase === 'discard';
   const other = g?.players[1 - g.me];
+  useLayoutEffect(() => {
+    const previous = opponentBefore.current;
+    opponentBefore.current = [];
+    opponentAnimations.current.forEach((a) => a.cancel());
+    opponentAnimations.current = [];
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    document
+      .querySelectorAll<HTMLElement>('[data-opponent-card]')
+      .forEach((el, i) => {
+        const old = previous[i];
+        if (!old) return;
+        const r = el.getBoundingClientRect();
+        if (Math.abs(old.left - r.left) < 1) return;
+        opponentAnimations.current.push(
+          el.animate(
+            [
+              { translate: `${old.left - r.left}px ${old.top - r.top}px` },
+              { translate: '0 0' },
+            ],
+            { duration: 320, easing: 'cubic-bezier(.22,1,.36,1)' },
+          ),
+        );
+      });
+  }, [other?.count]);
   const motion = useCardMotion(
     order,
     setOrder,
@@ -175,19 +337,21 @@ export default function Home() {
         ) || null
       );
     },
-    async (id) => {
+    async (id, animate) => {
       if (!mayDiscard) {
         setError('Draw a card on your turn before discarding.');
         return false;
       }
-      return !!(await call('discard', id));
+      return !!(await call('discard', id, seat, animate));
     },
     `${g?.code}/${g?.round}/${g?.status}`,
   );
+  motionRef.current = motion;
   const drag = motion.drag;
   function leave() {
     localStorage.removeItem('mehfil-seat');
     setSeat(null);
+    gRef.current = null;
     setG(null);
     setConfirm('');
     setError('');
@@ -210,6 +374,26 @@ export default function Home() {
       onPointerCancel={(e) => void motion.end(e, true)}
       onClickCapture={motion.click}
     >
+      {flightMotion.flight && (
+        <div
+          ref={flightMotion.element}
+          className={`playing-card flight-card ${flightMotion.flight.card?.s && flightMotion.flight.card.s % 2 ? 'red' : ''} ${!flightMotion.flight.card ? 'card-back' : ''}`}
+          style={{
+            left: flightMotion.flight.from.left,
+            top: flightMotion.flight.from.top,
+            width: flightMotion.flight.width,
+            height: flightMotion.flight.height,
+            transform: `scale(${flightMotion.flight.from.width / flightMotion.flight.width},${flightMotion.flight.from.height / flightMotion.flight.height})`,
+          }}
+          aria-hidden="true"
+        >
+          {flightMotion.flight.card ? (
+            <Face c={flightMotion.flight.card} />
+          ) : (
+            <b>✦</b>
+          )}
+        </div>
+      )}
       {drag && (
         <div
           ref={motion.ghost}
@@ -227,7 +411,11 @@ export default function Home() {
       )}
       <header>
         <div className="brand">
-          ♠ <span>mehfil</span>
+          <span className="brand-icon">♠</span>
+          <span>
+            mehfil<span className="brand-dot">.</span>
+          </span>
+          <small>THE RUMMY CLUB</small>
         </div>
         <span className="eyebrow">INDIAN RUMMY · 13 CARDS</span>
         <button className="quiet" onClick={() => setRules(true)}>
@@ -239,11 +427,13 @@ export default function Home() {
         {!g ? (
           <>
             <div className="welcome">
-              <span className="eyebrow">A TABLE FOR TWO</span>
+              <span className="eyebrow welcome-badge">
+                ✦ BIG FUN. THIRTEEN CARDS.
+              </span>
               <h1>
-                Good cards.
+                Your table.
                 <br />
-                Great company.
+                <span>Your happy place.</span>
               </h1>
               <p>Your favourite rummy table, wherever you are.</p>
               <form
@@ -300,6 +490,14 @@ export default function Home() {
                   Clear saved seat
                 </button>
               )}
+            </div>
+            <div className="welcome-buddy">
+              <img src="/buddy.png" alt="Your cheerful robot card buddy" />
+              <span>
+                Meet your new
+                <br />
+                <strong>card buddy!</strong>
+              </span>
             </div>
             <div className="sample">
               {[1, 13, 12, 11, 10].map((r, i) => (
@@ -360,7 +558,13 @@ export default function Home() {
                 <div
                   className={`opponent ${!mine && g.status === 'playing' ? 'active-player' : ''}`}
                 >
-                  <div className="avatar">{other?.name[0]?.toUpperCase()}</div>
+                  <div className="avatar">
+                    {other?.bot ? (
+                      <img src="/buddy.png" alt="" />
+                    ) : (
+                      other?.name[0]?.toUpperCase()
+                    )}
+                  </div>
                   <div>
                     <strong>{other?.name}</strong>
                     <small>
@@ -384,7 +588,9 @@ export default function Home() {
                   aria-label={`${other?.count} hidden cards`}
                 >
                   {Array.from({ length: other?.count || 13 }, (_, i) => (
-                    <div className="card-back" key={i} />
+                    <div data-opponent-card className="card-back" key={i}>
+                      ✦
+                    </div>
                   ))}
                 </div>
                 <div className="center-label">
@@ -392,13 +598,15 @@ export default function Home() {
                     ROUND {String(g.round).padStart(2, '0')}
                   </span>
                   <h2>
-                    {g.status === 'ended'
-                      ? 'Round complete'
-                      : mine
-                        ? g.phase === 'draw'
-                          ? 'Your move. Pick a card.'
-                          : 'Make room. Discard one.'
-                        : `${other?.name}’s turn`}
+                    {flightMotion.flight
+                      ? flightMotion.flight.label
+                      : g.status === 'ended'
+                        ? 'Round complete'
+                        : mine
+                          ? g.phase === 'draw'
+                            ? 'Your move. Pick a card.'
+                            : 'Make room. Discard one.'
+                          : `${other?.name}’s turn`}
                   </h2>
                 </div>
                 <div className="piles">
@@ -418,7 +626,9 @@ export default function Home() {
                     }
                     onClick={() => call('draw')}
                   >
-                    <div className="card-back deck">♠</div>
+                    <div data-draw-card className="card-back deck">
+                      <span>✦</span>
+                    </div>
                     <span>
                       Draw pile <small>{g.remaining}</small>
                     </span>
@@ -443,6 +653,7 @@ export default function Home() {
                     disabled={busy || !mine}
                   >
                     <div
+                      data-discard-card
                       className={`playing-card ${g.pile[0]?.s % 2 ? 'red' : ''}`}
                     >
                       {g.pile[0] && <Face c={g.pile[0]} />}
@@ -453,7 +664,12 @@ export default function Home() {
                   </button>
                 </div>
                 <div className="table-mark">
-                  M <span>MEHFIL CARD CLUB</span>
+                  ✦
+                  <span>
+                    GOOD CARDS.
+                    <br />
+                    GREAT COMPANY.
+                  </span>
                 </div>
                 <div className="hand-area">
                   <div className="hand-heading">

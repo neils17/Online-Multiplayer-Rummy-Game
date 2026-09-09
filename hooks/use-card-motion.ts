@@ -23,7 +23,7 @@ export function useCardMotion(
   setOrder: React.Dispatch<React.SetStateAction<string[]>>,
   select: (id: string | null) => void,
   onDraw: (source: 'draw' | 'open') => Promise<Card | null>,
-  onDiscard: (id: string) => Promise<boolean>,
+  onDiscard: (id: string, animate: () => Promise<void>) => Promise<boolean>,
   gameKey: string,
 ) {
   const [drag, setDrag] = useState<Gesture | null>(null);
@@ -85,7 +85,7 @@ export function useCardMotion(
     const tilt = matchMedia('(prefers-reduced-motion: reduce)').matches
       ? 0
       : Math.max(-7, Math.min(7, dx / 32));
-    el.style.transform = `translate3d(${dx}px,${dy}px,0) rotate(${tilt}deg) scale(1.055)`;
+    el.style.transform = `translate3d(${dx}px,${dy}px,0) rotate(${tilt}deg) scale(1.025)`;
   }
   useLayoutEffect(() => {
     if (drag) paint();
@@ -190,7 +190,7 @@ export function useCardMotion(
     active.current = null;
     setDrag(null);
   }
-  async function land(rect: DOMRect) {
+  async function land(rect: DOMRect, keep = false) {
     const d = active.current,
       el = ghost.current;
     if (!d || !el) {
@@ -217,7 +217,7 @@ export function useCardMotion(
     try {
       await animation.finished;
     } catch {}
-    cleanup();
+    if (!keep) cleanup();
   }
   const nextFrame = () =>
     new Promise<void>((resolve) =>
@@ -291,10 +291,10 @@ export function useCardMotion(
       const rect =
         target.querySelector('.playing-card')?.getBoundingClientRect() ||
         target.getBoundingClientRect();
-      const ok = await onDiscard(d.id);
+      const ok = await onDiscard(d.id, () => land(rect, true));
       if (active.current !== d) return;
       if (ok) {
-        await land(rect);
+        cleanup();
         return;
       }
     }
@@ -332,5 +332,20 @@ export function useCardMotion(
     end,
     click,
     sort: (next: string[]) => update(next),
+    capture: snapshot,
+    isDragging: () => !!active.current?.moved,
+    reserve: async () => {
+      update([...orderRef.current.filter((id) => id !== INCOMING), INCOMING]);
+      await nextFrame();
+      return elements()
+        .find((el) => el.dataset.card === INCOMING)
+        ?.getBoundingClientRect();
+    },
+    fill: (id: string) =>
+      update(
+        orderRef.current
+          .filter((c) => c !== id)
+          .map((c) => (c === INCOMING ? id : c)),
+      ),
   };
 }

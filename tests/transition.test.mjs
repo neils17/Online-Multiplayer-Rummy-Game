@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {opponentTransition} from '../lib/transition.ts';
+const card={id:'public',r:7,s:1};
+const state={code:'TEST',round:1,me:0,status:'playing',pile:[card],players:[{count:13,hand:[],name:'You'},{count:13,hand:[],name:'Bot'}]};
+const clone=()=>structuredClone(state);
+assert.equal(opponentTransition(state,clone()),null);
+const closed=clone();closed.players[1].count=14;assert.deepEqual(opponentTransition(state,closed),{kind:'draw',open:false,card:null,label:'Bot is drawing a card'});
+const open=clone();open.players[1].count=14;open.pile=[];assert.equal(opponentTransition(state,open).card.id,'public');assert.equal(opponentTransition(state,open).open,true);
+const discarded=clone();discarded.pile=[{id:'discarded',r:9,s:2}];assert.equal(opponentTransition(closed,discarded).kind,'discard');assert.equal(opponentTransition(closed,discarded).card.id,'discarded');
+const fresh=clone();fresh.round=2;assert.equal(opponentTransition(closed,fresh),null);
+const otherRoom=clone();otherRoom.code='NEW';assert.equal(opponentTransition(closed,otherRoom),null);
+console.log('PASS: unchanged snapshots, concealed deck draws, visible open draws, public discards and new-round transitions.');

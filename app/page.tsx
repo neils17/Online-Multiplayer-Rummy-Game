@@ -15,9 +15,9 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { CardFace as Face } from '@/components/game/card-face';
+import { CardFace as Face, cardAsset } from '@/components/game/card-face';
 import { useCardFlight } from '@/hooks/use-card-flight';
-import { opponentTransition } from '@/lib/transition';
+import { opponentTransition, visibleDiscard } from '@/lib/transition';
 import {
   describeGroup,
   splitGroups,
@@ -47,6 +47,7 @@ type View = {
   phase: string;
   wild: Card;
   pile: Card[];
+  underDiscard?: Card | null;
   remaining: number;
   message: string;
   history: { round: number; points: number[]; message: string }[];
@@ -58,9 +59,16 @@ export default function Home() {
   const [seat, setSeat] = useState<Seat | null>(null);
   const [g, setG] = useState<View | null>(null);
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (g?.underDiscard) {
+      const image = new Image();
+      image.src = cardAsset(g.underDiscard);
+    }
+  }, [g?.underDiscard?.id]);
   const [error, setError] = useState('');
   const [connection, setConnection] = useState(true);
   const [selected, setSelected] = useState<string | null>(null);
+  const [liftedDiscard, setLiftedDiscard] = useState<string | null>(null);
   const [order, setOrder] = useState<string[]>([]);
   const groupCounter = useRef(0);
   const [arranging, setArranging] = useState(false);
@@ -123,6 +131,8 @@ export default function Home() {
         presenting.current = true;
         setBusy(true);
         try {
+          if (event.kind === 'draw' && event.open)
+            setLiftedDiscard(previous!.pile[0]?.id || null);
           await flightMotion.fly(
             source.getBoundingClientRect(),
             event.kind === 'draw'
@@ -146,6 +156,7 @@ export default function Home() {
           );
         } finally {
           presenting.current = false;
+          setLiftedDiscard(null);
           setBusy(false);
         }
         return;
@@ -196,10 +207,22 @@ export default function Home() {
           const from = source.getBoundingClientRect();
           const to = await motionRef.current?.reserve();
           if (to) {
-            await flightMotion.fly(from, to, card, 'Drawing your card', () => {
-              motionRef.current?.fill(card.id);
-              commit(next);
-            });
+            if (action === 'open')
+              setLiftedDiscard(previous.pile[0]?.id || null);
+            try {
+              await flightMotion.fly(
+                from,
+                to,
+                card,
+                'Drawing your card',
+                () => {
+                  motionRef.current?.fill(card.id);
+                  commit(next);
+                },
+              );
+            } finally {
+              setLiftedDiscard(null);
+            }
             return;
           }
         }
@@ -361,6 +384,11 @@ export default function Home() {
   );
   motionRef.current = motion;
   const drag = motion.drag;
+  const discardFace = visibleDiscard(
+    g?.pile[0],
+    g?.underDiscard,
+    drag?.source === 'open' ? drag.face?.id : liftedDiscard,
+  );
   const handGroups = splitGroups(order).map((group) => ({
     ...group,
     cards: group.ids
@@ -663,43 +691,45 @@ export default function Home() {
               </div>
             ) : (
               <>
-                <div
-                  className={`opponent ${!mine && g.status === 'playing' ? 'active-player' : ''}`}
-                >
-                  <div className="avatar">
-                    {other?.bot ? (
-                      <span className="dealer-monogram">M</span>
-                    ) : (
-                      other?.name[0]?.toUpperCase()
-                    )}
-                  </div>
-                  <div>
-                    <strong>{other?.name}</strong>
-                    <small>
-                      {g.status === 'ended'
-                        ? 'Round complete'
-                        : !mine
-                          ? other?.bot
-                            ? g.phase === 'draw'
-                              ? 'Drawing…'
-                              : 'Choosing a discard…'
-                            : 'Playing…'
-                          : `${other?.count} cards`}
-                    </small>
-                  </div>
-                  <span className="points">
-                    {other?.score} <small>pts</small>
-                  </span>
-                </div>
-                <div
-                  className="opponent-cards"
-                  aria-label={`${other?.count} hidden cards`}
-                >
-                  {Array.from({ length: other?.count || 13 }, (_, i) => (
-                    <div data-opponent-card className="card-back" key={i}>
-                      ✦
+                <div className="opponent-seat">
+                  <div
+                    className={`opponent ${!mine && g.status === 'playing' ? 'active-player' : ''}`}
+                  >
+                    <div className="avatar">
+                      {other?.bot ? (
+                        <span className="dealer-monogram">M</span>
+                      ) : (
+                        other?.name[0]?.toUpperCase()
+                      )}
                     </div>
-                  ))}
+                    <div>
+                      <strong>{other?.name}</strong>
+                      <small>
+                        {g.status === 'ended'
+                          ? 'Round complete'
+                          : !mine
+                            ? other?.bot
+                              ? g.phase === 'draw'
+                                ? 'Drawing…'
+                                : 'Choosing a discard…'
+                              : 'Playing…'
+                            : `${other?.count} cards`}
+                      </small>
+                    </div>
+                    <span className="points">
+                      {other?.score} <small>pts</small>
+                    </span>
+                  </div>
+                  <div
+                    className="opponent-cards"
+                    aria-label={`${other?.count} hidden cards`}
+                  >
+                    {Array.from({ length: other?.count || 13 }, (_, i) => (
+                      <div data-opponent-card className="card-back" key={i}>
+                        ✦
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 <div className="center-label">
                   <span className="eyebrow">
@@ -748,6 +778,7 @@ export default function Home() {
                         mine &&
                         g.phase === 'draw' &&
                         !busy &&
+                        !!g.pile[0] &&
                         !isWild(g.pile[0], g.wild.r)
                       )
                         motion.start(e, 'open', INCOMING, g.pile[0]);
@@ -758,13 +789,15 @@ export default function Home() {
                         ? call('discard', selected)
                         : call('open')
                     }
-                    disabled={busy || !mine}
+                    disabled={
+                      busy || !mine || (g.phase === 'draw' && !g.pile[0])
+                    }
                   >
                     <div
                       data-discard-card
-                      className={`playing-card ${g.pile[0]?.s % 2 ? 'red' : ''}`}
+                      className={`playing-card ${discardFace?.s && discardFace.s % 2 ? 'red' : ''} ${!discardFace ? 'empty-discard' : ''}`}
                     >
-                      {g.pile[0] && <Face c={g.pile[0]} />}
+                      {discardFace && <Face c={discardFace} />}
                     </div>
                     <span>
                       {mayDiscard ? 'Drop card here' : 'Discard pile'}
@@ -1014,6 +1047,17 @@ export default function Home() {
           <DialogDescription>
             Two-player Indian points rummy · House rules
           </DialogDescription>
+          <p className="art-credit">
+            Card artwork:{' '}
+            <a
+              href="https://github.com/letele/playing-cards"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Letele / Adrian Kennard’s playing cards
+            </a>{' '}
+            · CC0.
+          </p>
           <ol>
             <li>
               Draw from the closed deck or the top discard, then discard one

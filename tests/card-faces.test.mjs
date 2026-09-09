@@ -2,40 +2,57 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { CardFace } from '../components/game/card-face.tsx';
+import { CardFace, cardAsset } from '../components/game/card-face.tsx';
+const paths = new Set();
 for (let s = 0; s < 4; s++)
   for (let r = 1; r <= 13; r++) {
+    const card = { id: `${s}-${r}`, r, s };
+    const path = cardAsset(card);
+    paths.add(path);
     const html = renderToStaticMarkup(
-      React.createElement(CardFace, { c: { id: `${s}-${r}`, r, s } }),
+      React.createElement(CardFace, { c: card }),
     );
-    assert.equal(
-      (html.match(/<path /g) || []).length,
-      r <= 10 ? r + 2 : 2,
-      `${r} suit ${s}: correct pips and two corner suits`,
+    assert.ok(html.includes(path));
+    assert.ok(html.includes('class="deck-face"'));
+    assert.ok(!html.includes('court-half') && !html.includes('<svg'));
+    const asset = await readFile(`public${path}`, 'utf8');
+    assert.ok(asset.includes('viewBox="-120 -168 240 336"'));
+    const rank = [
+      '',
+      'A',
+      '2',
+      '3',
+      '4',
+      '5',
+      '6',
+      '7',
+      '8',
+      '9',
+      '10',
+      'J',
+      'Q',
+      'K',
+    ][r];
+    assert.ok(
+      asset.includes(
+        `face="${r === 10 ? 'T' : rank}${['S', 'H', 'C', 'D'][s]}"`,
+      ),
     );
-    assert.ok(html.includes('classic-index-bottom'));
-    assert.ok(!html.includes('undefined') && !html.includes('NaN'));
-    if (r >= 11)
-      assert.equal((html.match(/class="court-half/g) || []).length, 2);
+    assert.ok(
+      !/<script|<foreignObject|https?:\/\/[^" ]+\.(png|js)/i.test(asset),
+    );
   }
+assert.equal(paths.size, 52);
 const joker = renderToStaticMarkup(
-  React.createElement(CardFace, { c: { id: 'joker', r: 0, s: 0 }, w: 4 }),
+  React.createElement(CardFace, { c: { id: 'j', r: 0, s: 0 }, w: 8 }),
 );
-assert.ok(joker.includes('/casino-joker.png'));
+assert.ok(joker.includes('/cards/J-1.svg'));
 assert.ok(joker.includes('wild-marker'));
-const hearts = renderToStaticMarkup(
-  React.createElement(CardFace, { c: { id: 'h', r: 1, s: 1 } }),
+assert.ok(
+  (await readFile('public/cards/LICENSE.txt', 'utf8')).includes(
+    'CC0 1.0 Universal',
+  ),
 );
-assert.ok(hearts.includes('M0 14C-3 9'));
-const diamonds = renderToStaticMarkup(
-  React.createElement(CardFace, { c: { id: 'd', r: 1, s: 3 } }),
-);
-assert.ok(diamonds.includes('M0-12L10 1'));
-const atlas = await readFile('public/casino-courts.png');
-assert.equal(atlas.readUInt32BE(16), 1254);
-assert.equal(atlas.readUInt32BE(20), 1254);
-await readFile('public/casino-joker.png');
-await readFile('public/casino-back.svg');
 console.log(
-  'PASS: all 52 ranks and suits, exact pip counts, mirrored court panels, joker and required assets.',
+  'PASS: all 52 exact GitHub SVG faces, suit/rank mapping, native 5:7 aspect ratio, joker and CC0 license.',
 );

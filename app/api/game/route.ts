@@ -14,6 +14,7 @@ function view(g: Game, i: number, code: string, revision = 0) {
     botAt: undefined,
     remaining: g.deck.length,
     pile: g.pile.slice(-1),
+    underDiscard: g.pile.at(-2) || null,
     players: g.players.map((p, j) => ({
       name: p.name,
       bot: !!p.bot,

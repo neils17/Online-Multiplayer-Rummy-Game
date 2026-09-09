@@ -223,6 +223,8 @@ export function act(g: Game, i: number, a: string, cardId?: string) {
   const p = g.players[i];
   if (a === 'draw' || a === 'open') {
     if (g.phase !== 'draw') throw Error('Discard a card first.');
+    if (a === 'open' && !g.pile.length)
+      throw Error('The discard pile is empty.');
     if (a === 'open' && isWild(g.pile[g.pile.length - 1], g.wild.r))
       throw Error('A discarded joker cannot be picked up.');
     if (!g.deck.length) {

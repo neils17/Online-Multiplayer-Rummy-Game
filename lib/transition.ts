@@ -42,3 +42,13 @@ export function opponentTransition(
     };
   return null;
 }
+
+// Hide a lifted card only while it is still the snapshot's top card. Once the
+// server confirms the draw, its replacement is already the new visible top.
+export function visibleDiscard(
+  top: Card | undefined,
+  underneath: Card | null | undefined,
+  liftedId: string | null | undefined,
+) {
+  return top?.id === liftedId ? underneath || null : top || null;
+}

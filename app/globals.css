@@ -2765,9 +2765,9 @@ small,
 
 /* More felt between the play zones; a compact hand rail anchored at the bottom. */
 .casino.game-shell {
-  --hand-card-width: 96px;
-  --pile-card-width: 96px;
-  --hand-height: 292px;
+  --hand-card-width: 110px;
+  --pile-card-width: 104px;
+  --hand-height: 336px;
 }
 .casino.game-shell .table.in-game {
   grid-template-columns: minmax(0, 1fr);
@@ -2859,9 +2859,9 @@ small,
 .casino.game-shell .group-cards .hand-card {
   width: var(--hand-card-width);
   height: calc(var(--hand-card-width) * 1.4);
-  margin-left: calc(var(--hand-card-width) * -0.82);
+  margin-left: calc(var(--hand-card-width) * -0.5);
   max-width: none;
-  border-radius: 4px;
+  border-radius: 10% / 7.142857%;
 }
 .casino.game-shell .group-cards .hand-card:first-child {
   margin-left: 0;
@@ -2883,9 +2883,9 @@ small,
 }
 @media (max-width: 750px), (max-height: 820px) {
   .casino.game-shell {
-    --hand-card-width: 82px;
+    --hand-card-width: 94px;
     --pile-card-width: 82px;
-    --hand-height: 270px;
+    --hand-height: 300px;
   }
   .casino.game-shell .table.in-game {
     grid-template-rows: 26px 44px 34px minmax(0, 1fr) var(--hand-height);
@@ -2928,19 +2928,19 @@ small,
     gap: 6px;
   }
 }
-@media (max-width: 750px) and (max-height: 650px) {
+@media (max-width: 750px) and (max-height: 680px) {
   .casino.game-shell {
-    --hand-card-width: 76px;
-    --pile-card-width: 68px;
-    --hand-height: 242px;
+    --hand-card-width: 90px;
+    --pile-card-width: 76px;
+    --hand-height: 272px;
   }
   .casino.game-shell .table.in-game {
-    grid-template-rows: 24px 38px 26px minmax(0, 1fr) var(--hand-height);
-    gap: 5px;
+    grid-template-rows: 24px 34px 24px minmax(0, 1fr) var(--hand-height);
+    gap: 4px;
     padding: 5px;
   }
   .casino.game-shell .opponent {
-    height: 36px;
+    height: 34px;
   }
   .casino.game-shell .hand-area {
     grid-template-rows: 28px minmax(0, 1fr) 16px 0px 38px;
@@ -2956,7 +2956,7 @@ small,
 }
 @media (orientation: landscape) and (max-height: 540px) {
   .casino.game-shell {
-    --hand-card-width: 82px;
+    --hand-card-width: 94px;
     --pile-card-width: 76px;
   }
   .casino.game-shell .table.in-game {
@@ -3010,4 +3010,40 @@ small,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Keep the SVG silhouette and the dragging layer equally rounded. */
+.playing-card,
+.card-back,
+.playing-card.card-back,
+.casino .deck,
+.drag-ghost.playing-card,
+.flight-card.playing-card {
+  border-radius: 10% / 7.142857%;
+  overflow: hidden;
+}
+@media (max-width: 750px) and (max-height: 600px) {
+  .casino.game-shell {
+    --pile-card-width: 62px;
+  }
+  .casino.game-shell .pile-item {
+    gap: 4px;
+  }
+}
+@media (orientation: landscape) and (max-height: 540px) {
+  .casino.game-shell {
+    --hand-card-width: 90px;
+  }
+  .casino.game-shell .hand-area {
+    grid-template-rows: 28px minmax(0, 1fr) 0px 0px 38px;
+    gap: 2px;
+  }
+  .casino.game-shell .group-progress {
+    display: none;
+  }
+}
+@media (orientation: landscape) and (max-height: 360px) {
+  .casino.game-shell {
+    --hand-card-width: 82px;
+  }
 }

@@ -15,6 +15,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { CardFace as Face } from '@/components/game/card-face';
 import { useCardFlight } from '@/hooks/use-card-flight';
 import { opponentTransition } from '@/lib/transition';
 import {
@@ -51,34 +52,6 @@ type View = {
   history: { round: number; points: number[]; message: string }[];
 };
 type Seat = { code: string; token: string };
-function Face({ c, w }: { c: Card; w?: number }) {
-  const royal = c.r === 1 || c.r >= 11;
-  const wild = w !== undefined && isWild(c, w);
-  return (
-    <>
-      <span className={`card-index index-top ${wild ? 'wild-index' : ''}`}>
-        {rank(c.r)}
-        <i>{c.r ? suit[c.s] : '★'}</i>
-      </span>
-      <div className={`card-center ${royal ? 'royal-center' : ''}`}>
-        {royal && (
-          <img
-            className="royal-art"
-            src="/royal-crown.png"
-            alt=""
-            draggable={false}
-          />
-        )}
-        <b>{c.r ? suit[c.s] : '★'}</b>
-      </div>
-      <span className={`card-index index-bottom ${wild ? 'wild-index' : ''}`}>
-        {rank(c.r)}
-        <i>{c.r ? suit[c.s] : '★'}</i>
-      </span>
-      {w !== undefined && isWild(c, w) && <em>WILD</em>}
-    </>
-  );
-}
 export default function Home() {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
@@ -505,7 +478,7 @@ export default function Home() {
   }
   return (
     <main
-      className={`shell ${g ? 'game-shell' : ''}`}
+      className={`shell casino ${g ? 'game-shell' : ''}`}
       onPointerMove={motion.move}
       onPointerUp={(e) => void motion.end(e)}
       onPointerCancel={(e) => void motion.end(e, true)}
@@ -565,14 +538,14 @@ export default function Home() {
           <>
             <div className="welcome">
               <span className="eyebrow welcome-badge">
-                ✦ BIG FUN. THIRTEEN CARDS.
+                PRIVATE TABLES · CLASSIC RUMMY
               </span>
               <h1>
-                Your table.
+                Take your seat.
                 <br />
-                <span>Your happy place.</span>
+                <span>Play your hand.</span>
               </h1>
-              <p>Your favourite rummy table, wherever you are.</p>
+              <p>Thirteen cards. Two players. A table of your own.</p>
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -617,7 +590,7 @@ export default function Home() {
                   disabled={busy}
                   onClick={() => call('practice', undefined, null)}
                 >
-                  ♧ Play against bot
+                  Play against the dealer
                 </button>
                 <small>No invite needed. Same rules, your own pace.</small>
               </div>
@@ -628,13 +601,11 @@ export default function Home() {
                 </button>
               )}
             </div>
-            <div className="welcome-buddy">
-              <img src="/buddy.png" alt="Your cheerful robot card buddy" />
-              <span>
-                Meet your new
-                <br />
-                <strong>card buddy!</strong>
-              </span>
+            <div className="casino-emblem" aria-hidden="true">
+              <span className="emblem-suits">♠ ♦ ♣ ♥</span>
+              <span className="emblem-name">MEHFIL</span>
+              <span className="emblem-rule" />
+              <span className="emblem-caption">THE RUMMY CLUB</span>
             </div>
             <div className="sample">
               {[1, 13, 12, 11, 10].map((r, i) => (
@@ -697,7 +668,7 @@ export default function Home() {
                 >
                   <div className="avatar">
                     {other?.bot ? (
-                      <img src="/buddy.png" alt="" />
+                      <span className="dealer-monogram">M</span>
                     ) : (
                       other?.name[0]?.toUpperCase()
                     )}
@@ -1027,10 +998,10 @@ export default function Home() {
               {connection ? 'Table connected' : 'Reconnecting…'}
             </>
           ) : (
-            'Make a little room for play.'
+            'The private rummy club.'
           )}
         </span>
-        <span>✦ No stakes. Just bragging rights.</span>
+        <span>PLAY FOR POINTS · NO STAKES</span>
         {g && (
           <button className="quiet" onClick={() => setConfirm('leave')}>
             Leave table

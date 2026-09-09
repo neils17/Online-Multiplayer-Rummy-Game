@@ -2025,3 +2025,703 @@ footer .quiet {
     height: 27px;
   }
 }
+
+/* MEHFIL — the classic private casino. */
+:root {
+  --background: #0c1110;
+  --foreground: #eee7d7;
+  --primary: #c8a66b;
+  --primary-foreground: #181910;
+  --card: #18221d;
+  --border: #514732;
+  --popover: #18221d;
+  --popover-foreground: #eee7d7;
+  --muted: #202d26;
+  --muted-foreground: #a5afa1;
+  --ink: #eee7d7;
+  --purple: #c8a66b;
+  --yellow: #dbc28e;
+  --aqua: #1c7052;
+  color-scheme: dark;
+}
+body {
+  color: #eee7d7;
+  background: radial-gradient(
+    ellipse at 50% 0%,
+    #263027 0%,
+    #101714 48%,
+    #090d0c 100%
+  );
+  font-family: 'Avenir Next', var(--font-geist-sans), Arial, sans-serif;
+}
+button {
+  border-color: #c09b5a;
+  background: linear-gradient(160deg, #e2c990, #bb9656);
+  color: #1b2017;
+  border-radius: 6px;
+  font-weight: 650;
+  box-shadow:
+    0 1px 0 #f6e8c16b inset,
+    0 3px 9px #0004;
+}
+button:active:not(:disabled) {
+  box-shadow: 0 1px 3px #0007 inset;
+}
+button:focus-visible,
+input:focus-visible {
+  outline-color: #e7cc89;
+}
+button.quiet {
+  color: #c1b89f;
+}
+button.quiet:hover {
+  color: #f4dfad;
+  background: #dab6720c;
+}
+input {
+  border: 1px solid #706044;
+  background: #101d17;
+  border-radius: 6px;
+  color: #f1eadb;
+  box-shadow: 0 2px 8px #0002 inset;
+}
+input::placeholder {
+  color: #8f9c91;
+}
+small,
+.eyebrow {
+  color: #a6b3a4;
+}
+.casino header {
+  border-bottom: 1px solid #a4834733;
+  padding-bottom: 4px;
+}
+.casino .brand {
+  gap: 12px;
+}
+.casino .brand > span:nth-child(2) {
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 33px;
+  font-weight: 400;
+  letter-spacing: 1px;
+  font-variant: small-caps;
+}
+.casino .brand-dot {
+  color: #c5a468;
+}
+.casino .brand-icon {
+  background: transparent;
+  color: #d9bd81;
+  border: 1px solid #aa8e55;
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px #b18a3910;
+  rotate: 0deg;
+  width: 37px;
+  height: 37px;
+  font-size: 25px;
+}
+.casino .brand small {
+  color: #a3977b;
+  font-size: 9px;
+  letter-spacing: 2px;
+  font-weight: 500;
+}
+.casino header > .quiet {
+  border: 1px solid #6d6046;
+  background: #ffffff03;
+  border-radius: 5px;
+  color: #d4c5a3;
+}
+.casino .table {
+  border: 3px solid #654d2e;
+  border-radius: 32px;
+  background:
+    repeating-linear-gradient(
+      45deg,
+      #ffffff01 0px,
+      #ffffff01 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    radial-gradient(ellipse at 50% 32%, #216044, #154d35 45%, #0b2d21 100%);
+  box-shadow:
+    0 0 0 2px #15110c,
+    0 0 0 5px #463420,
+    0 0 0 6px #a3854940,
+    0 14px 45px #0009,
+    inset 0 0 0 3px #111c1470,
+    inset 0 0 50px #03170e70;
+}
+.casino.game-shell .table.in-game {
+  border-radius: 26px;
+}
+.casino .table-line {
+  border: 1px solid #c5a26955;
+  inset: 11px;
+  border-radius: inherit;
+}
+.casino .table:not(.in-game) {
+  min-height: 660px;
+}
+.casino .welcome-badge {
+  color: #c6b07d;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  border-radius: 0;
+  font-size: 10px;
+  letter-spacing: 2.5px;
+  box-shadow: none;
+}
+.casino .welcome h1,
+.casino .waiting h1 {
+  color: #f5eddd;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 50px;
+  font-weight: 400;
+  letter-spacing: -1.5px;
+  line-height: 1.12;
+}
+.casino .welcome h1 > span {
+  color: #d0b277;
+}
+.casino .welcome p,
+.casino .waiting p {
+  color: #b8c9b7;
+}
+.casino .welcome form:not(.join) input,
+.casino .join input {
+  background: #0a2018c9;
+  border-color: #66714e;
+}
+.casino .join button,
+.casino .secondary {
+  background: linear-gradient(#243c2e, #162a20);
+  color: #e4d3ab;
+  border: 1px solid #89754b;
+  box-shadow: 0 2px 5px #0003;
+}
+.casino .practice-option {
+  border-top: 1px solid #b5a16d44;
+}
+.casino .practice-option > span {
+  color: #b1ba9d;
+  letter-spacing: 2px;
+  font-weight: 500;
+}
+.casino .practice-option .secondary {
+  color: #e6d7b7;
+  background: #132e23;
+  border-color: #998552;
+  box-shadow: none;
+}
+.casino .practice-option small,
+.casino .welcome > small,
+.casino .waiting small {
+  color: #a2b9a6;
+}
+.casino-emblem {
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  align-self: end;
+  width: 270px;
+  height: 240px;
+  margin: 0 auto 24px;
+  border: 1px solid #c5a46577;
+  outline: 1px solid #c5a46522;
+  outline-offset: 7px;
+  border-radius: 50%;
+  color: #d2b67a;
+}
+.emblem-suits {
+  letter-spacing: 14px;
+  margin-left: 14px;
+  font-size: 20px;
+}
+.emblem-name {
+  font-family: Georgia, serif;
+  font-size: 41px;
+  letter-spacing: 6px;
+  margin-top: 14px;
+}
+.emblem-rule {
+  height: 1px;
+  width: 110px;
+  background: #c5a46588;
+  margin: 16px 0;
+}
+.emblem-caption {
+  font-size: 9px;
+  letter-spacing: 4px;
+}
+.casino .sample {
+  grid-row: 2;
+  margin-bottom: 45px;
+}
+.casino .table-top .quiet,
+.casino .practice-label {
+  color: #d3c4a0;
+  font-weight: 500;
+  letter-spacing: 0.6px;
+}
+.casino .table-top strong {
+  color: #e2c78c;
+}
+.casino .table-top .room span {
+  color: #a9bda8;
+}
+.casino .opponent {
+  border: 1px solid #9d875444;
+  background: #10271eed;
+  border-radius: 10px;
+  box-shadow: 0 3px 8px #0002;
+  color: #f0e4c9;
+}
+.casino .opponent.active-player {
+  border-color: #d7b970;
+  box-shadow:
+    0 0 0 2px #cfa14d15,
+    0 2px 12px #0004;
+}
+.casino .opponent small {
+  color: #a8b69e;
+}
+.casino .avatar {
+  color: #d7bb7e;
+  background: #162b20;
+  border: 1px solid #968353;
+  border-radius: 50%;
+}
+.dealer-monogram {
+  font-family: Georgia, serif;
+  font-size: 24px;
+  font-weight: 400;
+}
+.casino .points {
+  color: #ddc48d;
+  border-color: #b6a47744;
+}
+.casino .points small {
+  color: #91a28c;
+}
+.casino .center-label > .eyebrow {
+  border: 1px solid #bc9d5e4d;
+  background: #112e2280;
+  color: #c8b687;
+  border-radius: 4px;
+  letter-spacing: 2px;
+}
+.casino .center-label h2 {
+  color: #e6ead8;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 400;
+  letter-spacing: 0.1px;
+}
+.casino .pile-item > span {
+  color: #b5c7b0;
+  font-weight: 500;
+}
+.casino .pile-item small {
+  color: #dac593;
+}
+.casino .drop-ready {
+  outline-color: #ddc078;
+  background: #c5aa4b0d;
+}
+.casino .hand-area {
+  background: linear-gradient(160deg, #0b241bea, #081a13f5);
+  border: 1px solid #9e87544d;
+  box-shadow:
+    0 3px 14px #0003,
+    inset 0 1px 0 #cbb6740a;
+  border-radius: 12px;
+}
+.casino.game-shell .hand-area {
+  border-radius: 12px;
+}
+.casino .you {
+  color: #ded8c5;
+}
+.casino .you > span:last-child {
+  color: #839985;
+}
+.casino .status-dot {
+  background: #4e6052;
+}
+.casino .status-dot.lit {
+  background: #c4a669;
+  box-shadow: 0 0 0 3px #bda26416;
+}
+.casino .hand-heading .quiet {
+  color: #bdcbb6;
+  background: #ffffff05;
+  border: 1px solid #64765355;
+  border-radius: 5px;
+}
+.casino .hand-tools .arrange-button {
+  color: #f1dba5;
+  background: #9c7d3829;
+  border: 1px solid #b79a58;
+  border-radius: 5px;
+  box-shadow: none;
+}
+.casino .hand-group {
+  --group-bg: #ffffff03;
+  --group-color: #80917938;
+  background: var(--group-bg);
+  border: 1px solid var(--group-color);
+  border-radius: 7px;
+  box-shadow: none;
+}
+.casino .group-pure {
+  --group-color: #82ad766e;
+  --group-bg: #96b74c0b;
+}
+.casino .group-sequence {
+  --group-color: #6794a675;
+  --group-bg: #52739a10;
+}
+.casino .group-set {
+  --group-color: #cba67775;
+  --group-bg: #c8a1590a;
+}
+.casino .group-pair {
+  --group-color: #89917552;
+  --group-bg: #ffffff03;
+}
+.casino .group-empty {
+  border-style: dashed;
+}
+.casino .group-label {
+  color: #9ba991;
+  font-weight: 500;
+  letter-spacing: 0.1px;
+}
+.casino .group-pure .group-label {
+  color: #aed298;
+}
+.casino .group-sequence .group-label {
+  color: #9bc3d0;
+}
+.casino .group-set .group-label {
+  color: #ddc18d;
+}
+.casino .group-pair .group-label {
+  color: #b6bb97;
+}
+.casino .group-label .remove-group {
+  color: inherit;
+  background: #ffffff06;
+  border: 1px solid #ffffff0a;
+  border-radius: 4px;
+}
+.casino .group-label .remove-group:hover {
+  background: #ffffff16;
+}
+.casino .empty-group {
+  color: #7e927d;
+}
+.casino .hand-hint,
+.casino .group-progress {
+  color: #92a58d;
+  font-weight: 400;
+}
+.casino .group-progress .complete {
+  color: #b1d191;
+}
+.casino.game-shell .hand {
+  scrollbar-color: #8c7a4a #10261c;
+}
+.casino .actions {
+  border-top: 1px solid #a8a07425;
+}
+.casino .actions > .quiet {
+  color: #b59a8b;
+}
+.casino .result,
+.casino.game-shell .result {
+  border: 1px solid #b79a61;
+  color: #eeddb7;
+  background: #14291ef8;
+  border-radius: 8px;
+  box-shadow: 0 10px 40px #0008;
+}
+.casino .result p,
+.casino .result .quiet {
+  color: #bbbf9d;
+}
+.casino .room-code,
+.casino .seat-orbit {
+  color: #d1b378;
+}
+.casino .notice {
+  background: #1b2d21;
+  border: 1px solid #b79c60;
+  color: #eee0bd;
+  border-radius: 6px;
+  box-shadow: 0 4px 18px #0006;
+}
+.casino .notice button.quiet {
+  color: #d9c79d;
+}
+.casino footer {
+  color: #819180;
+  letter-spacing: 0.4px;
+}
+.casino footer .quiet {
+  color: #acb29a;
+}
+.modal {
+  background: #15231c !important;
+  color: #e9e3d4 !important;
+  border: 1px solid #aa905b !important;
+  border-radius: 12px !important;
+  box-shadow: 0 25px 90px #0009;
+}
+.modal [data-slot='dialog-title'] {
+  font-family: Georgia, serif;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+.modal [data-slot='dialog-description'] {
+  color: #acbba5;
+}
+.modal [data-slot='table-row'] {
+  border-color: #76836740;
+}
+.modal [data-slot='table-head'],
+.modal a {
+  color: #d5bd84;
+}
+.revealed span {
+  background: #fff;
+  color: #171b1b;
+  border: 1px solid #d5d0c4;
+}
+.revealed .red {
+  color: #ba1427;
+}
+
+/* Crisp white faces, correct pips and conventional two-ended corner indexes. */
+.playing-card,
+.group-cards .hand-card {
+  --index-size: 15px;
+  --index-width: 17px;
+  --index-inset: 4px;
+  background: #fff;
+  color: #15191b;
+  border: 1px solid #d4d0c7;
+  border-radius: 5px;
+  box-shadow:
+    0 1px 1px #0003,
+    0 3px 5px #0004;
+  padding: 0;
+  font-family: 'Times New Roman', Georgia, serif;
+  overflow: hidden;
+}
+.playing-card.red {
+  color: #bb1124;
+}
+.playing-card .card-art {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+.playing-card .number-face {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.playing-card .court-panel {
+  position: absolute;
+  inset: 5% 14%;
+  border: 0.5px solid #282828;
+  overflow: hidden;
+}
+.playing-card .court-half {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 50%;
+  background: #fff url('/casino-courts.png') var(--court-x) var(--court-y) /
+    404.516129% var(--court-size-y) no-repeat;
+}
+.playing-card .court-half-bottom {
+  top: 50%;
+  transform: rotate(180deg);
+}
+.playing-card .joker-illustration {
+  position: absolute;
+  inset: 10% 15%;
+  width: 70%;
+  height: 80%;
+  object-fit: contain;
+  pointer-events: none;
+}
+.playing-card .classic-index {
+  position: absolute;
+  width: var(--index-width);
+  text-align: center;
+  line-height: 0.94;
+  font-size: var(--index-size);
+  font-weight: 500;
+  letter-spacing: -1px;
+  pointer-events: none;
+}
+.playing-card .classic-index > span {
+  font-size: inherit;
+  line-height: 1;
+}
+.playing-card .classic-index svg {
+  display: block;
+  width: 11px;
+  height: 12px;
+  margin: 1px auto 0;
+}
+.playing-card .classic-index-top {
+  left: var(--index-inset);
+  top: 4px;
+}
+.playing-card .classic-index-bottom {
+  right: var(--index-inset);
+  bottom: 4px;
+  transform: rotate(180deg);
+}
+.playing-card .joker-index {
+  font-family: Georgia, serif;
+  font-size: 6px;
+  letter-spacing: 0;
+  width: 9px;
+}
+.playing-card .joker-index > span:first-child {
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  margin: auto;
+  line-height: 1;
+}
+.playing-card .joker-index .joker-star {
+  font-size: 10px;
+  margin-top: 2px;
+}
+.playing-card .wild-marker {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  padding: 2px 3px;
+  background: #f4e6bc;
+  border: 1px solid #b79a55;
+  color: #685127;
+  border-radius: 3px;
+  font:
+    600 7px Arial,
+    sans-serif;
+}
+.group-cards .hand-card:not(:last-child) .card-art,
+.group-cards .hand-card:not(:last-child) .classic-index-bottom {
+  visibility: hidden;
+}
+.casino .hand-card.selected {
+  box-shadow:
+    inset 0 0 0 2px #d8b665,
+    0 2px 6px #0004;
+}
+.casino .hand-card.incoming-slot {
+  background: #afc08a12;
+  border: 1px dashed #c4b47688;
+  box-shadow: none;
+}
+.casino .hand-card.drag-source {
+  opacity: 0;
+}
+.card-back,
+.playing-card.card-back,
+.casino .deck {
+  background: #fff url('/casino-back.svg') center / 100% 100% no-repeat;
+  border: 1px solid #dfd8c9;
+  outline: none;
+  border-radius: 4px;
+  color: transparent;
+  box-shadow: 0 2px 4px #0006;
+}
+.card-back > span,
+.card-back > b,
+.playing-card.card-back > b {
+  visibility: hidden;
+}
+.opponent-cards .card-back {
+  font-size: 0;
+}
+.casino .deck {
+  box-shadow:
+    2px 2px 0 #d7cdbd,
+    3px 3px 0 #654231,
+    4px 4px 0 #ded4c3,
+    5px 5px 0 #654231,
+    0 7px 12px #0005;
+}
+.drag-ghost.playing-card,
+.flight-card.playing-card {
+  border-radius: 5px;
+  box-shadow:
+    0 9px 20px #0005,
+    0 1px 2px #0004;
+}
+@media (max-width: 750px), (max-height: 820px) {
+  .playing-card,
+  .group-cards .hand-card {
+    --index-size: 12px;
+    --index-width: 13px;
+    --index-inset: 3px;
+  }
+  .playing-card .classic-index svg {
+    width: 9px;
+    height: 10px;
+  }
+  .casino.game-shell .brand > span:nth-child(2) {
+    font-size: 25px;
+  }
+  .casino.game-shell .brand-icon {
+    width: 27px;
+    height: 27px;
+    font-size: 19px;
+  }
+  .casino.game-shell .table.in-game {
+    border-radius: 17px;
+  }
+  .casino.game-shell .hand-area {
+    border-radius: 8px;
+  }
+  .casino.game-shell .hand-group {
+    border-radius: 5px;
+  }
+  .casino .dealer-monogram {
+    font-size: 20px;
+  }
+}
+@media (max-width: 750px) {
+  .casino .table:not(.in-game) {
+    min-height: 0;
+    display: block;
+    padding: 32px 22px;
+  }
+  .casino-emblem {
+    display: none;
+  }
+  .casino .welcome h1 {
+    font-size: 42px;
+  }
+  .casino .sample {
+    margin: 34px 0 16px;
+  }
+  .casino .brand > span:nth-child(2) {
+    font-size: 29px;
+  }
+  .casino .brand small {
+    display: none;
+  }
+}

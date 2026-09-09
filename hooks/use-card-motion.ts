@@ -1,5 +1,6 @@
 'use client';
 import { useLayoutEffect, useRef, useState, useEffect } from 'react';
+import { moveToGroup } from '@/lib/arrange';
 import type { Card } from '@/lib/game';
 export const INCOMING = '__incoming';
 type Source = 'hand' | 'draw' | 'open';
@@ -132,22 +133,47 @@ export function useCardMotion(
       y <= r.bottom + 25
     );
   }
-  function nearest(x: number, y: number) {
-    let best = 0,
-      dist = Infinity;
-    elements().forEach((el, i) => {
-      const parent = el.offsetParent as HTMLElement | null;
-      const p = parent?.getBoundingClientRect();
-      if (!p) return; // Layout slots stay still even while their cards animate.
-      const cx = p.left + el.offsetLeft + el.offsetWidth / 2,
-        cy = p.top + el.offsetTop + el.offsetHeight / 2;
-      const distance = Math.hypot(cx - x, (cy - y) * 1.6);
-      if (distance < dist) {
-        dist = distance;
-        best = i;
+  function placeInHand(d: Gesture, x: number, y: number) {
+    const zones = Array.from(
+      hand.current?.querySelectorAll<HTMLElement>('[data-hand-group]') || [],
+    );
+    let zone = zones[0],
+      distance = Infinity;
+    for (const el of zones) {
+      const r = el.getBoundingClientRect();
+      const dx = Math.max(r.left - x, 0, x - r.right),
+        dy = Math.max(r.top - y, 0, y - r.bottom);
+      const score = Math.hypot(dx, dy * 1.6);
+      if (score < distance) {
+        zone = el;
+        distance = score;
       }
-    });
-    return best;
+    }
+    if (!zone) return;
+    const group = zone.dataset.handGroup!;
+    const els = Array.from(
+      zone.querySelectorAll<HTMLElement>('[data-card]'),
+    ).filter((el) => el.dataset.card !== d.id);
+    let anchor: string | undefined;
+    for (const [index, el] of els.entries()) {
+      const p = (el.offsetParent as HTMLElement)?.getBoundingClientRect();
+      if (!p) continue;
+      const left =
+        p.left + el.offsetLeft - (el.offsetParent as HTMLElement).scrollLeft;
+      const nextCard = els[index + 1];
+      const step = nextCard
+        ? el.offsetWidth +
+          parseFloat(getComputedStyle(nextCard).marginLeft || '0')
+        : el.offsetWidth;
+      if (x < left + step / 2) {
+        anchor = el.dataset.card;
+        break;
+      }
+    }
+    const base = orderRef.current.filter(
+      (id) => !(d.source === 'draw' && id === d.face?.id),
+    );
+    update(moveToGroup(base, d.id, group, anchor));
   }
   function move(e: React.PointerEvent<HTMLElement>) {
     const d = active.current;
@@ -174,12 +200,7 @@ export function useCardMotion(
     cancelAnimationFrame(frame.current);
     frame.current = requestAnimationFrame(paint);
     if (inHand(d.px, d.py)) {
-      const index = nearest(d.px, d.py);
-      const next = orderRef.current.filter(
-        (id) => id !== d.id && !(d.source === 'draw' && id === d.face?.id),
-      );
-      next.splice(Math.min(index, next.length), 0, d.id);
-      update(next);
+      placeInHand(d, d.px, d.py);
     } else if (d.source !== 'hand' && orderRef.current.includes(INCOMING))
       update(orderRef.current.filter((id) => id !== INCOMING));
   }
@@ -241,6 +262,7 @@ export function useCardMotion(
     }
     d.px = e.clientX;
     d.py = e.clientY;
+    if (!cancel && inHand(d.px, d.py)) placeInHand(d, d.px, d.py);
     d.settling = true;
     suppress.current = true;
     if (suppressTimer.current) clearTimeout(suppressTimer.current);

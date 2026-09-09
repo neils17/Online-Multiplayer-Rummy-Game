@@ -17,10 +17,12 @@ import {
 } from '@/components/ui/dialog';
 import { useCardFlight } from '@/hooks/use-card-flight';
 import { opponentTransition } from '@/lib/transition';
+import { describeGroup, splitGroups, isGroup, GROUP } from '@/lib/arrange';
 import { useCardMotion, INCOMING } from '@/hooks/use-card-motion';
 import { type Card, rank, suit, isWild } from '@/lib/game';
 type View = {
   revision?: number;
+  picked?: string | null;
   code: string;
   players: {
     name: string;
@@ -43,14 +45,26 @@ type View = {
 };
 type Seat = { code: string; token: string };
 function Face({ c, w }: { c: Card; w?: number }) {
+  const royal = c.r === 1 || c.r >= 11;
+  const wild = w !== undefined && isWild(c, w);
   return (
     <>
-      <span>
+      <span className={`card-index index-top ${wild ? 'wild-index' : ''}`}>
         {rank(c.r)}
         <i>{c.r ? suit[c.s] : '★'}</i>
       </span>
-      <b>{c.r ? suit[c.s] : '★'}</b>
-      <span className="corner">
+      <div className={`card-center ${royal ? 'royal-center' : ''}`}>
+        {royal && (
+          <img
+            className="royal-art"
+            src="/royal-crown.png"
+            alt=""
+            draggable={false}
+          />
+        )}
+        <b>{c.r ? suit[c.s] : '★'}</b>
+      </div>
+      <span className={`card-index index-bottom ${wild ? 'wild-index' : ''}`}>
         {rank(c.r)}
         <i>{c.r ? suit[c.s] : '★'}</i>
       </span>
@@ -68,6 +82,11 @@ export default function Home() {
   const [connection, setConnection] = useState(true);
   const [selected, setSelected] = useState<string | null>(null);
   const [order, setOrder] = useState<string[]>([]);
+  const groupCounter = useRef(0);
+  const [arranging, setArranging] = useState(false);
+  const arrangeWorker = useRef<Worker | null>(null);
+  useEffect(() => () => arrangeWorker.current?.terminate(), []);
+  const handRound = useRef('');
   const [rules, setRules] = useState(false);
   const [scores, setScores] = useState(false);
   const [confirm, setConfirm] = useState('');
@@ -285,18 +304,26 @@ export default function Home() {
   const hand = g?.players[g.me]?.hand || [];
   const handKey = hand.map((c) => c.id).join(',');
   useLayoutEffect(() => {
-    setOrder((old) => [
-      ...old.filter((id) => id === INCOMING || hand.some((c) => c.id === id)),
-      ...hand.filter((c) => !old.includes(c.id)).map((c) => c.id),
-    ]);
-  }, [handKey]);
-  const cards = order
-    .map((id) =>
-      id === INCOMING
-        ? { id: INCOMING, r: 0, s: 0 }
-        : hand.find((c) => c.id === id),
-    )
-    .filter(Boolean) as Card[];
+    const key = `${g?.code}/${g?.round}`;
+    setOrder((old) => {
+      if (handRound.current !== key) {
+        handRound.current = key;
+        return [
+          GROUP + 'a',
+          ...hand.slice(0, 7).map((c) => c.id),
+          GROUP + 'b',
+          ...hand.slice(7).map((c) => c.id),
+        ];
+      }
+      const retained = old.filter(
+        (id) => isGroup(id) || id === INCOMING || hand.some((c) => c.id === id),
+      );
+      return [
+        ...(retained.some(isGroup) ? retained : [GROUP + 'a']),
+        ...hand.filter((c) => !retained.includes(c.id)).map((c) => c.id),
+      ];
+    });
+  }, [handKey, g?.code, g?.round]);
   const mine = !!g && g.turn === g.me && g.status === 'playing';
   const mayDiscard = mine && g?.phase === 'discard';
   const other = g?.players[1 - g.me];
@@ -348,6 +375,107 @@ export default function Home() {
   );
   motionRef.current = motion;
   const drag = motion.drag;
+  const handGroups = splitGroups(order).map((group) => ({
+    ...group,
+    cards: group.ids
+      .map((id) =>
+        id === INCOMING
+          ? { id: INCOMING, r: 0, s: 0 }
+          : hand.find((c) => c.id === id),
+      )
+      .filter((c): c is Card => !!c)
+      .filter(
+        (c) =>
+          !(
+            drag?.source === 'draw' &&
+            drag.id === INCOMING &&
+            c.id === drag.face?.id
+          ),
+      ),
+  }));
+  const groupInfo = handGroups.map((group) =>
+    describeGroup(
+      group.cards.filter((c) => c.id !== INCOMING),
+      g?.wild.r || 1,
+    ),
+  );
+  const validCount = handGroups.reduce(
+    (sum, group, i) =>
+      sum +
+      (groupInfo[i].valid
+        ? group.cards.filter((c) => c.id !== INCOMING).length
+        : 0),
+    0,
+  );
+  const sequenceCount = groupInfo.filter((info) => info.sequence).length;
+  async function arrange() {
+    if (!hand.length || arranging) return;
+    setArranging(true);
+    try {
+      if (!arrangeWorker.current)
+        arrangeWorker.current = new Worker(
+          new URL('../lib/arrange.worker.ts', import.meta.url),
+          { type: 'module' },
+        );
+      const worker = arrangeWorker.current;
+      while (gRef.current) {
+        const current = gRef.current;
+        const currentHand = current.players[current.me].hand;
+        const fingerprint = JSON.stringify([
+          current.code,
+          current.round,
+          currentHand,
+          current.wild,
+          current.picked,
+        ]);
+        const groups = await new Promise<string[][]>((resolve, reject) => {
+          worker.onmessage = (
+            event: MessageEvent<{ groups?: string[][]; error?: string }>,
+          ) =>
+            event.data.error
+              ? reject(new Error(event.data.error))
+              : resolve(event.data.groups || []);
+          worker.onerror = () => {
+            worker.terminate();
+            arrangeWorker.current = null;
+            reject(new Error('Arrange could not finish. Please try again.'));
+          };
+          worker.postMessage({
+            hand: currentHand,
+            wild: current.wild.r,
+            picked: current.picked || null,
+          });
+        });
+        const latest = gRef.current;
+        if (!latest) break;
+        if (
+          fingerprint !==
+          JSON.stringify([
+            latest.code,
+            latest.round,
+            latest.players[latest.me].hand,
+            latest.wild,
+            latest.picked,
+          ])
+        )
+          continue;
+        motion.sort(
+          groups.flatMap((ids) => [
+            GROUP + String(++groupCounter.current),
+            ...ids,
+          ]),
+        );
+        setSelected(null);
+        break;
+      }
+    } catch (error) {
+      setError(
+        error instanceof Error ? error.message : 'Could not arrange this hand.',
+      );
+    } finally {
+      setArranging(false);
+    }
+  }
   function leave() {
     localStorage.removeItem('mehfil-seat');
     setSeat(null);
@@ -678,53 +806,110 @@ export default function Home() {
                       <strong>{g.players[g.me].name}</strong>
                       <span>You · {hand.length} cards</span>
                     </div>
-                    <button
-                      className="quiet"
-                      onClick={() =>
-                        motion.sort(
-                          [...hand]
-                            .sort((a, b) => a.s - b.s || a.r - b.r)
-                            .map((c) => c.id),
-                        )
-                      }
-                    >
-                      ⇄ Sort by suit
-                    </button>
+                    <div className="hand-tools">
+                      <button
+                        className="quiet"
+                        disabled={
+                          !hand.length ||
+                          handGroups.length >= hand.length + 1 ||
+                          !!drag ||
+                          !!flightMotion.flight ||
+                          arranging
+                        }
+                        onClick={() =>
+                          motion.sort([
+                            ...order,
+                            GROUP + String(++groupCounter.current),
+                          ])
+                        }
+                      >
+                        + Group
+                      </button>
+                      <button
+                        className="arrange-button"
+                        disabled={
+                          !hand.length ||
+                          !!drag ||
+                          !!flightMotion.flight ||
+                          arranging
+                        }
+                        onClick={arrange}
+                      >
+                        {arranging ? 'Arranging…' : '✦ Arrange'}
+                      </button>
+                    </div>
                   </div>
                   <div
                     ref={motion.hand}
                     className={`hand ${drag && drag.source !== 'hand' ? 'hand-receiving' : ''}`}
                     aria-label="Your hand"
                   >
-                    {cards
-                      .filter(
-                        (c) =>
-                          !(
-                            drag?.source === 'draw' &&
-                            drag.id === INCOMING &&
-                            c.id === drag.face?.id
-                          ),
-                      )
-                      .map((c, i) => (
-                        <button
-                          data-card={c.id}
-                          aria-label={`${rank(c.r)} ${suit[c.s]}${isWild(c, g.wild.r) ? ' wild joker' : ''}`}
-                          aria-pressed={selected === c.id}
-                          key={c.id}
-                          className={`playing-card hand-card ${c.s % 2 ? 'red' : ''} ${selected === c.id ? 'selected' : ''} ${drag?.id === c.id ? 'drag-source' : ''} ${c.id === INCOMING ? 'incoming-slot' : ''}`}
-                          onPointerDown={(e) => {
-                            if (c.id !== INCOMING)
-                              motion.start(e, 'hand', c.id, c);
-                          }}
-                          onClick={() => setSelected(c.id)}
+                    {handGroups.map((group, index) => {
+                      const info = groupInfo[index];
+                      return (
+                        <section
+                          key={group.id}
+                          data-hand-group={group.id}
+                          className={`hand-group group-${info.kind} ${group.cards.length > 7 ? 'group-scroll' : ''}`}
                         >
-                          <Face c={c} w={g.wild.r} />
-                        </button>
-                      ))}
+                          <div className="group-label">
+                            <span>
+                              {info.valid ? '✓ ' : ''}
+                              {info.label}
+                            </span>
+                            <small>
+                              {
+                                group.cards.filter((c) => c.id !== INCOMING)
+                                  .length
+                              }
+                            </small>
+                          </div>
+                          <div className="group-cards">
+                            {group.cards.map((c) => (
+                              <button
+                                data-card={c.id}
+                                aria-label={`${rank(c.r)} ${suit[c.s]}`}
+                                aria-pressed={selected === c.id}
+                                key={c.id}
+                                className={`playing-card hand-card ${c.s % 2 ? 'red' : ''} ${selected === c.id ? 'selected' : ''} ${drag?.id === c.id ? 'drag-source' : ''} ${c.id === INCOMING ? 'incoming-slot' : ''}`}
+                                onPointerDown={(e) => {
+                                  if (c.id !== INCOMING)
+                                    motion.start(e, 'hand', c.id, c);
+                                }}
+                                onClick={() => setSelected(c.id)}
+                              >
+                                <Face c={c} w={g.wild.r} />
+                              </button>
+                            ))}
+                            {!group.cards.length && (
+                              <span className="empty-group">
+                                Drop a card here
+                              </span>
+                            )}
+                          </div>
+                        </section>
+                      );
+                    })}
+                  </div>
+                  <div className="group-progress" aria-live="polite">
+                    <span
+                      className={
+                        groupInfo.some((info) => info.pure) ? 'complete' : ''
+                      }
+                    >
+                      {groupInfo.some((info) => info.pure) ? '✓' : '○'} Pure
+                      sequence
+                    </span>
+                    <span className={sequenceCount >= 2 ? 'complete' : ''}>
+                      {Math.min(sequenceCount, 2)}/2 sequences
+                    </span>
+                    <span>
+                      {validCount}/{hand.length} grouped
+                    </span>
                   </div>
                   <div className="hand-hint">
-                    Drag cards to rearrange · Drag from either pile into your
-                    hand
+                    Arrange prioritizes a pure sequence, two sequences, then the
+                    most grouped cards. Drag between groups to adjust.
                   </div>
                   <div className="actions">
                     <button

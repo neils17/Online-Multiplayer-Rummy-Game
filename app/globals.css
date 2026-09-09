@@ -1237,3 +1237,364 @@ footer .quiet {
     transition: none !important;
   }
 }
+/* Grouped hand: readable left indexes, clear meld boundaries, steady card slots. */
+.hand-tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.hand-tools .arrange-button {
+  font-size: 13px;
+  padding: 8px 14px;
+  border-radius: 11px;
+  box-shadow: 0 3px 0 #5939b5;
+}
+.hand.hand-receiving {
+  box-shadow: none;
+}
+.hand {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 14px;
+  padding: 4px 0 10px;
+  min-height: 165px;
+  max-width: none;
+  overflow: visible;
+}
+.hand-group {
+  --group-color: #b2b7c4;
+  --group-bg: #f0f2f7;
+  flex: 0 1 auto;
+  max-width: 100%;
+  min-width: 126px;
+  background: var(--group-bg);
+  border: 2px solid var(--group-color);
+  border-radius: 15px;
+  padding: 8px 8px 5px;
+  box-shadow: 0 3px 0 #78877812;
+  transition:
+    background 0.18s,
+    border-color 0.18s;
+}
+.group-pure {
+  --group-color: #59b394;
+  --group-bg: #e0f6ea;
+}
+.group-sequence {
+  --group-color: #60abc5;
+  --group-bg: #e3f6fd;
+}
+.group-set {
+  --group-color: #a387d4;
+  --group-bg: #f0e9ff;
+}
+.group-pair {
+  --group-color: #d2b467;
+  --group-bg: #fff7db;
+}
+.group-empty {
+  border-style: dashed;
+  background: transparent;
+}
+.group-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 23px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 800;
+  color: #64716e;
+  white-space: nowrap;
+}
+.group-label small {
+  font-size: 10px;
+  color: inherit;
+  opacity: 0.7;
+}
+.group-pure .group-label {
+  color: #328766;
+}
+.group-sequence .group-label {
+  color: #337a97;
+}
+.group-set .group-label {
+  color: #7e59b4;
+}
+.group-pair .group-label {
+  color: #9a7c32;
+}
+.group-cards {
+  display: flex;
+  position: relative;
+  align-items: flex-start;
+  min-height: 118px;
+  overflow: visible;
+  padding: 0 1px 6px;
+  scrollbar-width: thin;
+  scrollbar-color: #b9c4c4 transparent;
+}
+.group-scroll .group-cards {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.group-cards .hand-card {
+  width: 84px;
+  height: 112px;
+  margin-left: -50px;
+  flex-shrink: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: 10px;
+}
+.group-cards .hand-card:first-child {
+  margin-left: 0;
+}
+.empty-group {
+  align-self: center;
+  text-align: center;
+  width: 126px;
+  font-size: 12px;
+  color: #909b99;
+  line-height: 1.5;
+}
+.group-progress {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 7px 14px;
+  margin: 0 0 10px;
+  font-size: 11px;
+  color: #9699a3;
+  min-height: 18px;
+  font-weight: 650;
+}
+.group-progress .complete {
+  color: #389571;
+}
+.hand-hint {
+  font-size: 11px;
+  max-width: 580px;
+  margin: 0 auto 12px;
+  line-height: 1.5;
+}
+.card-index {
+  position: absolute;
+  left: 6px;
+  width: 23px;
+  text-align: center;
+  font-size: 19px;
+  font-weight: 850;
+  letter-spacing: -0.7px;
+  z-index: 2;
+}
+.playing-card .index-top {
+  top: 7px;
+}
+.playing-card .index-bottom {
+  bottom: 7px;
+  left: 6px;
+  font-size: 19px;
+  rotate: 0deg;
+}
+.card-index i {
+  font-size: 14px;
+  line-height: 1;
+  letter-spacing: 0;
+  margin-top: 3px;
+}
+.card-center {
+  position: absolute;
+  inset: 18px 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 9px;
+}
+.card-center b {
+  position: static;
+  font-size: 38px;
+  line-height: 1;
+  width: auto;
+  font-weight: 800;
+  text-align: center;
+}
+.royal-center {
+  inset: 16px 20px;
+  background: linear-gradient(150deg, #fff9e7, #f7efff);
+  border: 1px solid #e9ddbf;
+}
+.royal-center b {
+  font-size: 30px;
+}
+.royal-art {
+  display: block;
+  width: 45px;
+  height: 35px;
+  object-fit: contain;
+  margin-bottom: 2px;
+  pointer-events: none;
+  user-select: none;
+}
+.group-cards .hand-card:not(:last-child) .card-center {
+  visibility: hidden;
+}
+.playing-card em {
+  left: auto;
+  right: 5px;
+  bottom: 4px;
+  font-size: 6px;
+  background: #ffe79a;
+  border: 1px solid #eed171;
+  padding: 1px 3px;
+}
+.group-cards .hand-card:not(:last-child) em {
+  visibility: hidden;
+}
+.wild-index {
+  color: #b78416;
+}
+.opponent-cards .card-back:not(:last-child) {
+  color: transparent;
+}
+.card-back {
+  background: repeating-linear-gradient(
+    45deg,
+    #ab8aef 0,
+    #ab8aef 4px,
+    #a17ce7 4px,
+    #a17ce7 8px
+  );
+  text-align: center;
+}
+.playing-card.card-back > b {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  font-size: 34px;
+  margin: 0;
+}
+.playing-card .card-center,
+.playing-card .card-index {
+  pointer-events: none;
+}
+@media (max-width: 750px) {
+  .hand {
+    display: flex;
+    gap: 10px;
+    padding: 3px 0 8px;
+    min-height: 150px;
+    max-width: none;
+  }
+  .hand-group {
+    padding: 6px 5px 3px;
+    border-radius: 12px;
+    min-width: 100px;
+  }
+  .group-label {
+    font-size: 10px;
+    gap: 7px;
+    margin-bottom: 5px;
+    min-height: 22px;
+  }
+  .group-cards {
+    min-height: 101px;
+    padding-bottom: 6px;
+  }
+  .group-cards .hand-card {
+    width: 68px;
+    height: 95px;
+    margin-left: -43px;
+    max-width: none;
+    border-radius: 9px;
+  }
+  .group-cards .hand-card:first-child {
+    margin-left: 0;
+  }
+  .playing-card .card-index,
+  .playing-card .index-bottom {
+    left: 3px;
+    width: 21px;
+    font-size: 16px;
+  }
+  .playing-card .index-top {
+    top: 5px;
+  }
+  .playing-card .index-bottom {
+    bottom: 5px;
+  }
+  .playing-card .card-index i {
+    font-size: 12px;
+    margin-top: 2px;
+  }
+  .card-center {
+    inset: 17px 4px;
+  }
+  .card-center b {
+    font-size: 30px;
+  }
+  .royal-center {
+    inset: 15px 14px;
+  }
+  .royal-center b {
+    font-size: 25px;
+  }
+  .royal-art {
+    width: 35px;
+    height: 27px;
+    margin-bottom: 1px;
+  }
+  .empty-group {
+    width: 102px;
+    font-size: 11px;
+  }
+  .hand-tools {
+    gap: 3px;
+  }
+  .hand-tools .arrange-button {
+    padding: 7px 9px;
+    font-size: 12px;
+  }
+  .hand-tools .quiet {
+    padding: 7px 5px;
+  }
+  .group-progress {
+    font-size: 10px;
+    gap: 5px 10px;
+  }
+  .hand-heading .you > span:last-child {
+    display: none;
+  }
+  .hand-hint {
+    font-size: 10px;
+  }
+  .hand-area {
+    padding-left: 7px;
+    padding-right: 7px;
+  }
+  .group-cards .hand-card span {
+    font-size: 16px;
+  }
+}
+@media (max-width: 750px) {
+  .playing-card .card-index,
+  .playing-card .index-bottom {
+    width: 19px;
+    font-size: 15px;
+  }
+  .group-cards .hand-card .card-index {
+    font-size: 15px;
+  }
+  .playing-card .card-index i {
+    font-size: 11px;
+  }
+}

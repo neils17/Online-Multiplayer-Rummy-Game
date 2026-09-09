@@ -1598,3 +1598,430 @@ footer .quiet {
     font-size: 11px;
   }
 }
+
+/* A stable viewport shell: only the hand rail scrolls as groups change. */
+.game-shell {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100dvh;
+  max-width: none;
+  padding: max(10px, env(safe-area-inset-top)) 18px
+    max(8px, env(safe-area-inset-bottom));
+  display: grid;
+  grid-template-rows: 42px minmax(0, 1fr) 28px;
+  gap: 10px;
+  overflow: hidden;
+}
+.game-shell > header,
+.game-shell > footer {
+  min-width: 0;
+  margin: 0;
+}
+.game-shell .table.in-game {
+  margin: 0;
+  padding: 10px 18px;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-rows: 32px 52px 46px 66px 136px minmax(0, 1fr);
+  gap: 4px;
+  overflow: hidden;
+  border-radius: 30px;
+}
+.game-shell .table-top {
+  grid-row: 1;
+  position: relative;
+  inset: auto;
+  margin: 0;
+  padding: 0;
+}
+.game-shell .opponent {
+  grid-row: 2;
+  margin: 0 auto;
+  padding: 3px 12px;
+}
+.game-shell .opponent-cards {
+  grid-row: 3;
+  height: 100%;
+  overflow: visible;
+}
+.game-shell .center-label {
+  grid-row: 4;
+  margin: 0;
+  min-height: 0;
+  align-self: center;
+}
+.game-shell .center-label h2 {
+  margin: 4px 0 0;
+  font-size: 23px;
+  min-height: 28px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.game-shell .piles {
+  grid-row: 5;
+  min-height: 0;
+  align-self: center;
+}
+.game-shell .pile-item {
+  gap: 7px;
+}
+.game-shell .table-mark {
+  display: none;
+}
+.game-shell .hand-area {
+  grid-row: 6;
+  display: grid;
+  grid-template-rows: 36px minmax(0, 1fr) 22px 20px 52px;
+  gap: 5px;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  min-height: 0;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 20px;
+}
+.game-shell .hand-heading {
+  margin: 0;
+  min-height: 0;
+}
+.game-shell .hand {
+  min-width: 0;
+  min-height: 0;
+  max-width: none;
+  margin: 0;
+  padding: 6px 8px 9px;
+  align-content: center;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #b9c4c4 transparent;
+  scroll-padding: 12px;
+}
+.game-shell .hand::before,
+.game-shell .hand::after {
+  content: '';
+  flex: 1 0 0;
+}
+.game-shell .hand-group {
+  flex: 0 0 auto;
+  max-width: none;
+  min-width: 136px;
+}
+.game-shell .group-cards {
+  overflow: visible;
+}
+.game-shell .hand-hint,
+.game-shell .group-progress {
+  margin: 0;
+  min-height: 0;
+  align-self: center;
+}
+.game-shell .hand-hint {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.game-shell .actions {
+  min-height: 0;
+  padding-top: 5px;
+}
+.game-shell .actions button {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.game-shell .result {
+  position: absolute;
+  z-index: 6;
+  bottom: 66px;
+  left: 16px;
+  right: 16px;
+  margin: 0;
+  max-height: calc(100% - 108px);
+  overflow: auto;
+  background: #fffdf4f5;
+  box-shadow: 0 8px 30px #43366722;
+  animation: result-in 280ms ease-out both;
+}
+.game-shell .waiting {
+  grid-row: 2 / -1;
+  overflow: auto;
+  min-height: 0;
+  padding: 12px;
+}
+.game-shell .notice {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  z-index: 1100;
+  width: min(92%, 620px);
+}
+.group-label-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.group-label .remove-group {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  background: #ffffff7a;
+  color: inherit;
+  box-shadow: none;
+  font-size: 19px;
+  line-height: 1;
+}
+.group-label .remove-group:hover {
+  background: #ffffff;
+}
+@keyframes result-in {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+@media (max-width: 750px), (max-height: 820px) {
+  .game-shell {
+    padding: max(5px, env(safe-area-inset-top)) 6px
+      max(4px, env(safe-area-inset-bottom));
+    grid-template-rows: 34px minmax(0, 1fr) 22px;
+    gap: 5px;
+  }
+  .game-shell .brand {
+    font-size: 24px;
+    gap: 5px;
+  }
+  .game-shell .brand-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 22px;
+  }
+  .game-shell header .eyebrow,
+  .game-shell .brand > small {
+    display: none;
+  }
+  .game-shell header > .quiet {
+    padding: 5px 12px;
+  }
+  .game-shell .table.in-game {
+    padding: 6px;
+    border-radius: 20px;
+    grid-template-rows: 28px 40px 30px 48px 110px minmax(0, 1fr);
+    gap: 3px;
+  }
+  .game-shell .table-top .quiet {
+    padding: 3px 6px;
+    font-size: 12px;
+  }
+  .game-shell .avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
+  }
+  .game-shell .avatar img {
+    width: 47px;
+    height: 47px;
+  }
+  .game-shell .opponent {
+    gap: 8px;
+    padding: 0 8px;
+  }
+  .game-shell .opponent strong {
+    font-size: 13px;
+  }
+  .game-shell .opponent small {
+    font-size: 10px;
+  }
+  .game-shell .points {
+    font-size: 18px;
+  }
+  .game-shell .opponent-cards .card-back {
+    height: 29px;
+    width: 23px;
+    margin-left: -7px;
+    border-width: 2px;
+    font-size: 11px;
+  }
+  .game-shell .center-label h2 {
+    font-size: 17px;
+    min-height: 23px;
+    margin-top: 2px;
+  }
+  .game-shell .center-label > .eyebrow {
+    padding: 2px 8px;
+    font-size: 9px;
+  }
+  .game-shell .piles {
+    gap: 28px;
+  }
+  .game-shell .pile-item {
+    gap: 4px;
+  }
+  .game-shell .pile-item .playing-card,
+  .game-shell .deck {
+    width: 63px;
+    height: 86px;
+  }
+  .game-shell .pile-item > span {
+    font-size: 10px;
+    min-height: 14px;
+  }
+  .game-shell .deck > span {
+    width: 36px;
+    height: 36px;
+  }
+  .game-shell .hand-area {
+    padding: 5px;
+    grid-template-rows: 31px minmax(0, 1fr) 18px 16px 44px;
+    gap: 3px;
+    border-radius: 15px;
+  }
+  .game-shell .hand {
+    padding: 3px 2px 6px;
+    gap: 8px;
+  }
+  .game-shell .hand-group {
+    min-width: 116px;
+    padding: 4px 5px;
+  }
+  .game-shell .group-label {
+    margin-bottom: 3px;
+    min-height: 24px;
+  }
+  .game-shell .group-cards {
+    min-height: 98px;
+  }
+  .game-shell .group-cards .hand-card {
+    width: 68px;
+    height: 95px;
+    margin-left: -43px;
+  }
+  .game-shell .group-cards .hand-card:first-child {
+    margin-left: 0;
+  }
+  .game-shell .actions {
+    gap: 4px;
+  }
+  .game-shell .actions > div {
+    gap: 6px;
+  }
+  .game-shell .actions button {
+    padding: 6px 9px;
+    font-size: 12px;
+  }
+  .game-shell .hand-hint {
+    font-size: 9px;
+  }
+  .game-shell footer,
+  .game-shell footer .quiet {
+    font-size: 10px;
+    padding: 0 5px;
+  }
+}
+@media (max-width: 750px) and (max-height: 650px) {
+  .game-shell .table.in-game {
+    grid-template-rows: 25px 34px 24px 34px 92px minmax(0, 1fr);
+    gap: 2px;
+  }
+  .game-shell .opponent-cards .card-back {
+    height: 23px;
+  }
+  .game-shell .center-label > .eyebrow {
+    display: none;
+  }
+  .game-shell .pile-item .playing-card,
+  .game-shell .deck {
+    height: 72px;
+    width: 54px;
+  }
+  .game-shell .hand-area {
+    grid-template-rows: 29px minmax(0, 1fr) 18px 0px 40px;
+  }
+  .game-shell .hand-hint {
+    visibility: hidden;
+  }
+}
+@media (orientation: landscape) and (max-height: 540px) {
+  .game-shell .table.in-game {
+    grid-template-columns: minmax(210px, 38%) minmax(0, 1fr);
+    grid-template-rows: 28px 38px 28px 34px minmax(0, 1fr);
+    column-gap: 10px;
+  }
+  .game-shell .table-top {
+    grid-column: 1 / -1;
+  }
+  .game-shell .opponent,
+  .game-shell .opponent-cards,
+  .game-shell .center-label,
+  .game-shell .piles {
+    grid-column: 1;
+  }
+  .game-shell .hand-area {
+    grid-column: 2;
+    grid-row: 2 / -1;
+  }
+  .game-shell .center-label > .eyebrow {
+    display: none;
+  }
+  .game-shell .piles {
+    gap: 20px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .game-shell .result {
+    animation: none;
+  }
+}
+
+@media (max-width: 750px), (max-height: 820px) {
+  .game-shell .playing-card .card-index {
+    left: 3px;
+    width: 19px;
+    font-size: 15px;
+  }
+  .game-shell .playing-card .card-index i {
+    font-size: 11px;
+    margin-top: 2px;
+  }
+  .game-shell .playing-card .index-top {
+    top: 5px;
+  }
+  .game-shell .playing-card .index-bottom {
+    bottom: 5px;
+  }
+  .game-shell .card-center {
+    inset: 17px 4px;
+  }
+  .game-shell .card-center b {
+    font-size: 30px;
+  }
+  .game-shell .royal-center {
+    inset: 15px 14px;
+  }
+  .game-shell .royal-center b {
+    font-size: 25px;
+  }
+  .game-shell .royal-art {
+    width: 35px;
+    height: 27px;
+  }
+}

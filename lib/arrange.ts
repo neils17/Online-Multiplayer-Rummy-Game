@@ -27,6 +27,14 @@ export function moveToGroup(
   next.splice(anchor > start && anchor < end ? anchor : end, 0, card);
   return next;
 }
+export function removeGroup(order: string[], group: string) {
+  const groups = splitGroups(order);
+  const index = groups.findIndex((g) => g.id === group);
+  if (index < 0 || groups.length < 2) return order;
+  const removed = groups.splice(index, 1)[0];
+  groups[Math.max(0, index - 1)].ids.push(...removed.ids);
+  return groups.flatMap((g) => [g.id, ...g.ids]);
+}
 function pairKind(cards: Card[], wild: number) {
   if (cards.length !== 2) return '';
   const [a, b] = cards;

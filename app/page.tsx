@@ -17,7 +17,13 @@ import {
 } from '@/components/ui/dialog';
 import { useCardFlight } from '@/hooks/use-card-flight';
 import { opponentTransition } from '@/lib/transition';
-import { describeGroup, splitGroups, isGroup, GROUP } from '@/lib/arrange';
+import {
+  describeGroup,
+  splitGroups,
+  removeGroup,
+  isGroup,
+  GROUP,
+} from '@/lib/arrange';
 import ArrangeWorker from '@/lib/arrange.worker?worker';
 import { useCardMotion, INCOMING } from '@/hooks/use-card-motion';
 import { type Card, rank, suit, isWild } from '@/lib/game';
@@ -177,15 +183,21 @@ export default function Home() {
       previous.round === next.round &&
       !motionRef.current?.isDragging()
     ) {
-      if ((action === 'discard' || action === 'declare') && cardId) {
+      const discardedId =
+        action === 'declare'
+          ? previous.players[previous.me].hand.find(
+              (c) => !next.players[next.me].hand.some((n) => n.id === c.id),
+            )?.id
+          : cardId;
+      if ((action === 'discard' || action === 'declare') && discardedId) {
         const source = Array.from(
           document.querySelectorAll<HTMLElement>('[data-card]'),
-        ).find((el) => el.dataset.card === cardId);
+        ).find((el) => el.dataset.card === discardedId);
         const target = document.querySelector<HTMLElement>(
           '[data-discard-card]',
         );
         const card = previous.players[previous.me].hand.find(
-          (c) => c.id === cardId,
+          (c) => c.id === discardedId,
         );
         if (source && target && card) {
           await flightMotion.fly(
@@ -493,7 +505,7 @@ export default function Home() {
   }
   return (
     <main
-      className="shell"
+      className={`shell ${g ? 'game-shell' : ''}`}
       onPointerMove={motion.move}
       onPointerUp={(e) => void motion.end(e)}
       onPointerCancel={(e) => void motion.end(e, true)}
@@ -813,12 +825,25 @@ export default function Home() {
                           !!flightMotion.flight ||
                           arranging
                         }
-                        onClick={() =>
-                          motion.sort([
-                            ...order,
-                            GROUP + String(++groupCounter.current),
-                          ])
-                        }
+                        onClick={() => {
+                          const id = GROUP + String(++groupCounter.current);
+                          motion.sort([...order, id]);
+                          requestAnimationFrame(() =>
+                            requestAnimationFrame(() => {
+                              Array.from(
+                                motion.hand.current?.querySelectorAll<HTMLElement>(
+                                  '[data-hand-group]',
+                                ) || [],
+                              )
+                                .find((el) => el.dataset.handGroup === id)
+                                ?.scrollIntoView({
+                                  behavior: 'smooth',
+                                  block: 'nearest',
+                                  inline: 'nearest',
+                                });
+                            }),
+                          );
+                        }}
                       >
                         + Group
                       </button>
@@ -854,12 +879,29 @@ export default function Home() {
                               {info.valid ? '✓ ' : ''}
                               {info.label}
                             </span>
-                            <small>
-                              {
-                                group.cards.filter((c) => c.id !== INCOMING)
-                                  .length
-                              }
-                            </small>
+                            <div className="group-label-tools">
+                              <small>
+                                {
+                                  group.cards.filter((c) => c.id !== INCOMING)
+                                    .length
+                                }
+                              </small>
+                              <button
+                                className="remove-group"
+                                aria-label={`Remove ${info.label.toLowerCase()} group; keep its cards`}
+                                disabled={
+                                  handGroups.length < 2 ||
+                                  !!drag ||
+                                  !!flightMotion.flight ||
+                                  arranging
+                                }
+                                onClick={() =>
+                                  motion.sort(removeGroup(order, group.id))
+                                }
+                              >
+                                ×
+                              </button>
+                            </div>
                           </div>
                           <div className="group-cards">
                             {group.cards.map((c) => (
@@ -906,7 +948,7 @@ export default function Home() {
                   </div>
                   <div className="hand-hint">
                     Arrange prioritizes a pure sequence, two sequences, then the
-                    most grouped cards. Drag between groups to adjust.
+                    most grouped cards. Invalid declarations cost 80 points.
                   </div>
                   <div className="actions">
                     <button
@@ -931,8 +973,8 @@ export default function Home() {
                             Discard
                           </button>
                           <button
-                            disabled={!mayDiscard || !selected || busy}
-                            onClick={() => setConfirm('declare')}
+                            disabled={!mayDiscard || hand.length !== 14 || busy}
+                            onClick={() => call('declare')}
                           >
                             Declare hand ↗
                           </button>
@@ -1020,8 +1062,9 @@ export default function Home() {
               can be in a pure sequence.
             </li>
             <li>
-              Select your 14th card to discard, then declare. We check every
-              possible arrangement automatically.
+              With 14 cards on your turn, press Declare. We automatically choose
+              a legal spare card and check every possible arrangement
+              automatically.
             </li>
           </ol>
           <p>
@@ -1113,18 +1156,12 @@ export default function Home() {
       >
         <DialogContent className="modal">
           <DialogTitle>
-            {confirm === 'declare'
-              ? 'Ready to declare?'
-              : confirm === 'drop'
-                ? 'Drop this round?'
-                : 'Leave this table?'}
+            {confirm === 'drop' ? 'Drop this round?' : 'Leave this table?'}
           </DialogTitle>
           <DialogDescription>
-            {confirm === 'declare'
-              ? 'Your selected card will be discarded. The remaining 13 must form a valid hand. An invalid declaration costs 80 points.'
-              : confirm === 'drop'
-                ? `You will receive ${g?.players[g.me].draws ? 40 : 20} penalty points. Your friend wins the round.`
-                : 'Leaving clears your saved seat on this device. You will not be able to reclaim it. If a round is active, it will be recorded as a drop.'}
+            {confirm === 'drop'
+              ? `You will receive ${g?.players[g.me].draws ? 40 : 20} penalty points. Your friend wins the round.`
+              : 'Leaving clears your saved seat on this device. You will not be able to reclaim it. If a round is active, it will be recorded as a drop.'}
           </DialogDescription>
           <button
             disabled={busy}
@@ -1140,11 +1177,7 @@ export default function Home() {
               } else await call(a, selected || undefined);
             }}
           >
-            {confirm === 'declare'
-              ? 'Discard & declare'
-              : confirm === 'drop'
-                ? 'Drop round'
-                : 'Leave table'}
+            {confirm === 'drop' ? 'Drop round' : 'Leave table'}
           </button>
           <button className="quiet" onClick={() => setConfirm('')}>
             Keep playing

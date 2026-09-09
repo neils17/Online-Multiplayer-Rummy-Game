@@ -103,3 +103,22 @@ for (let sample = 0; sample < 100; sample++) {
 console.log(
   `PASS: 100 seeded hands preserve every card; ${Math.round(performance.now() - started)}ms total.`,
 );
+const { removeGroup } = await import('../lib/arrange.ts');
+const grouped = [GROUP + 'a', 'a', 'b', GROUP + 'b', 'c', GROUP + 'c', 'd'];
+for (const marker of [GROUP + 'a', GROUP + 'b', GROUP + 'c']) {
+  const result = removeGroup(grouped, marker);
+  assert.equal(splitGroups(result).length, 2);
+  assert.deepEqual(
+    splitGroups(result)
+      .flatMap((g) => g.ids)
+      .sort(),
+    ['a', 'b', 'c', 'd'],
+  );
+}
+assert.deepEqual(removeGroup([GROUP + 'a', 'a'], GROUP + 'a'), [
+  GROUP + 'a',
+  'a',
+]);
+console.log(
+  'PASS: removing first, middle or last groups keeps every card and retains the final group.',
+);

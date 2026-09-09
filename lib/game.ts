@@ -165,6 +165,49 @@ export function finish(
     message,
   });
 }
+// Search every legal discard with shared exact meld states. No selected card is required.
+export function winningDiscard(
+  hand: Card[],
+  wild: number,
+  picked: string | null,
+) {
+  if (hand.length !== 14) return null;
+  const full = (1 << hand.length) - 1;
+  const byBit: { mask: number; type: number }[][] = Array.from(
+    { length: 14 },
+    () => [],
+  );
+  for (let mask = 1; mask <= full; mask++) {
+    const cards = hand.filter((_, i) => mask & (1 << i));
+    for (const type of meld(cards, wild)) {
+      for (let i = 0; i < 14; i++)
+        if (mask & (1 << i)) byBit[i].push({ mask, type });
+    }
+  }
+  const memo = new Map<number, boolean>();
+  function valid(mask: number, sequences: number, pure: number): boolean {
+    if (!mask) return sequences >= 2 && !!pure;
+    const key = mask * 6 + sequences * 2 + pure;
+    if (memo.has(key)) return memo.get(key)!;
+    const bit = 31 - Math.clz32(mask & -mask);
+    const result = byBit[bit].some(
+      ({ mask: group, type }) =>
+        (mask & group) === group &&
+        valid(
+          mask ^ group,
+          Math.min(2, sequences + +(type > 0)),
+          pure || +(type === 2),
+        ),
+    );
+    memo.set(key, result);
+    return result;
+  }
+  return (
+    hand.find(
+      (card, i) => card.id !== picked && valid(full ^ (1 << i), 0, 0),
+    ) || null
+  );
+}
 export function act(g: Game, i: number, a: string, cardId?: string) {
   if (a === 'next') {
     if (g.status !== 'ended') throw Error('Finish this round first.');
@@ -199,21 +242,31 @@ export function act(g: Game, i: number, a: string, cardId?: string) {
     g.phase = 'discard';
     return;
   }
-  if (a === 'discard' || a === 'declare') {
+  if (a === 'declare') {
+    if (g.phase !== 'discard' || p.hand.length !== 14)
+      throw Error('Draw to 14 cards before declaring.');
+    const spare = winningDiscard(p.hand, g.wild.r, g.picked);
+    if (spare) {
+      g.pile.push(
+        p.hand.splice(
+          p.hand.findIndex((c) => c.id === spare.id),
+          1,
+        )[0],
+      );
+      const penalty = analyze(g.players[1 - i].hand, g.wild.r).penalty;
+      finish(g, 1 - i, penalty, `${p.name} declared a winning hand!`);
+    } else {
+      finish(g, i, 80, `${p.name} made an invalid declaration. 80 points.`);
+    }
+    return;
+  }
+  if (a === 'discard') {
     if (g.phase !== 'discard') throw Error('Draw a card first.');
     const ix = p.hand.findIndex((c) => c.id === cardId);
     if (ix < 0) throw Error('Choose a card to discard.');
     if (cardId === g.picked)
       throw Error('You cannot return the card you just picked up.');
     g.pile.push(p.hand.splice(ix, 1)[0]);
-    if (a === 'declare') {
-      if (analyze(p.hand, g.wild.r).valid) {
-        const penalty = analyze(g.players[1 - i].hand, g.wild.r).penalty;
-        finish(g, 1 - i, penalty, `${p.name} declared a winning hand!`);
-      } else
-        finish(g, i, 80, `${p.name} made an invalid declaration. 80 points.`);
-      return;
-    }
     g.turn = 1 - i;
     g.phase = 'draw';
     g.picked = null;

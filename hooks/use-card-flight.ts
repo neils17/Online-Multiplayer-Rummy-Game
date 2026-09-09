@@ -1,5 +1,6 @@
 'use client';
 import { useRef, useState, useEffect } from 'react';
+import { flushSync } from 'react-dom';
 import type { Card } from '@/lib/game';
 export type Flight = {
   from: DOMRect;
@@ -31,10 +32,10 @@ export function useCardFlight() {
   ) {
     if (!alive.current) return;
     const visibility = source?.style.visibility;
-    if (source) source.style.visibility = 'hidden';
     const width = Math.max(from.width, to.width),
       height = Math.max(from.height, to.height);
-    setFlight({ from, to, card, label, width, height });
+    flushSync(() => setFlight({ from, to, card, label, width, height }));
+    if (source) source.style.visibility = 'hidden';
     await new Promise<void>((r) =>
       requestAnimationFrame(() => requestAnimationFrame(() => r())),
     );
@@ -46,36 +47,35 @@ export function useCardFlight() {
         sy = to.height / height,
         startX = from.width / width,
         startY = from.height / height;
-      const animation = el.animate(
-        [
-          {
-            transform: `translate3d(0,0,0) rotate(0deg) scale(${startX},${startY})`,
-          },
-          {
-            transform: `translate3d(${dx * 0.48}px,${dy * 0.48 - 24}px,0) rotate(${dx < 0 ? -5 : 5}deg) scale(${(startX + sx) / 2},${(startY + sy) / 2})`,
-            offset: 0.48,
-          },
-          {
-            transform: `translate3d(${dx}px,${dy}px,0) rotate(0deg) scale(${sx},${sy})`,
-          },
-        ],
-        {
-          duration: matchMedia('(prefers-reduced-motion: reduce)').matches
-            ? 0
-            : 540,
-          easing: 'cubic-bezier(.3,.05,.18,1)',
-          fill: 'forwards',
-        },
-      );
+      // Sample one continuous arc so direction and rotation never kink mid-flight.
+      const frames = Array.from({ length: 31 }, (_, index) => {
+        const t = index / 30;
+        const x = dx * t;
+        const y = dy * t - 60 * t * (1 - t);
+        const turn = Math.sin(Math.PI * t) * (dx < 0 ? -4 : 4);
+        return {
+          offset: t,
+          transform: `translate3d(${x}px,${y}px,0) rotate(${turn}deg) scale(${startX + (sx - startX) * t},${startY + (sy - startY) * t})`,
+        };
+      });
+      const animation = el.animate(frames, {
+        duration: matchMedia('(prefers-reduced-motion: reduce)').matches
+          ? 0
+          : Math.min(680, 440 + Math.hypot(dx, dy) * 0.22),
+        easing: 'cubic-bezier(.22,.61,.36,1)',
+        fill: 'forwards',
+      });
       running.current = animation;
       try {
         await animation.finished;
       } catch {}
     }
     if (alive.current) {
-      commit();
+      flushSync(() => {
+        commit();
+        setFlight(null);
+      });
       if (source) source.style.visibility = visibility || '';
-      setFlight(null);
     }
     running.current = null;
   }

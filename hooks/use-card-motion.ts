@@ -17,6 +17,7 @@ type Gesture = {
   moved: boolean;
   settling: boolean;
   original: string[];
+  group?: string;
   drawRequest?: Promise<Card | null>;
 };
 export function useCardMotion(
@@ -35,6 +36,7 @@ export function useCardMotion(
   const before = useRef(new Map<string, DOMRect>());
   const animations = useRef(new Map<HTMLElement, Animation>());
   const frame = useRef(0);
+  const lastPaint = useRef(0);
   const suppress = useRef(false);
   const suppressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const elements = () =>
@@ -64,20 +66,43 @@ export function useCardMotion(
     animations.current.clear();
     const targets = els.map((el) => ({ el, r: el.getBoundingClientRect() }));
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    targets.forEach(({ el, r }) => {
+    targets.forEach(({ el, r }, index) => {
       const old = starts.get(el);
-      if (!old || el.dataset.card === active.current?.id) return;
+      if (el.dataset.card === active.current?.id) return;
+      if (!old) {
+        if (
+          el.dataset.card !== INCOMING &&
+          !previous.has(INCOMING) &&
+          !active.current
+        ) {
+          const animation = el.animate(
+            [
+              { opacity: 0, translate: '0px 10px' },
+              { opacity: 1, translate: '0px 0px' },
+            ],
+            {
+              duration: 320,
+              delay: index * 18,
+              easing: 'cubic-bezier(.2,.75,.2,1)',
+              fill: 'backwards',
+            },
+          );
+          animations.current.set(el, animation);
+        }
+        return;
+      }
       const x = old.left - r.left,
         y = old.top - r.top;
       if (Math.abs(x) + Math.abs(y) < 1) return;
       const animation = el.animate(
         [{ translate: `${x}px ${y}px` }, { translate: '0px 0px' }],
-        { duration: 260, easing: 'cubic-bezier(.22,1,.36,1)' },
+        { duration: 340, easing: 'cubic-bezier(.2,.75,.2,1)' },
       );
       animations.current.set(el, animation);
     });
   }, [order]);
-  function paint() {
+  function paint(now = performance.now()) {
+    frame.current = 0;
     const d = active.current,
       el = ghost.current;
     if (!d || !el) return;
@@ -87,9 +112,32 @@ export function useCardMotion(
       ? 0
       : Math.max(-7, Math.min(7, dx / 32));
     el.style.transform = `translate3d(${dx}px,${dy}px,0) rotate(${tilt}deg) scale(1.025)`;
+    if (d.moved && !d.settling) {
+      const dt = Math.min(
+        32,
+        Math.max(1, now - (lastPaint.current || now - 16)),
+      );
+      lastPaint.current = now;
+      const rail = hand.current;
+      if (rail && inHand(d.px, d.py)) {
+        const rect = rail.getBoundingClientRect();
+        const speed = (point: number, start: number, end: number) =>
+          point < start + 32
+            ? -Math.min(1, (start + 32 - point) / 32)
+            : point > end - 32
+              ? Math.min(1, (point - end + 32) / 32)
+              : 0;
+        rail.scrollLeft += speed(d.px, rect.left, rect.right) * dt * 0.55;
+        rail.scrollTop += speed(d.py, rect.top, rect.bottom) * dt * 0.55;
+        placeInHand(d, d.px, d.py);
+      } else if (d.source !== 'hand' && orderRef.current.includes(INCOMING)) {
+        update(orderRef.current.filter((id) => id !== INCOMING));
+      }
+      frame.current = requestAnimationFrame(paint);
+    }
   }
   useLayoutEffect(() => {
-    if (drag) paint();
+    if (drag && !frame.current) frame.current = requestAnimationFrame(paint);
   }, [drag]);
   function start(
     e: React.PointerEvent<HTMLButtonElement>,
@@ -149,8 +197,21 @@ export function useCardMotion(
         distance = score;
       }
     }
+    // Keep a small boundary cushion while a group changes width under the pointer.
+    const currentZone = zones.find((el) => el.dataset.handGroup === d.group);
+    if (currentZone) {
+      const r = currentZone.getBoundingClientRect();
+      if (
+        x >= r.left - 10 &&
+        x <= r.right + 10 &&
+        y >= r.top - 10 &&
+        y <= r.bottom + 10
+      )
+        zone = currentZone;
+    }
     if (!zone) return;
     const group = zone.dataset.handGroup!;
+    d.group = group;
     const els = Array.from(
       zone.querySelectorAll<HTMLElement>('[data-card]'),
     ).filter((el) => el.dataset.card !== d.id);
@@ -197,15 +258,12 @@ export function useCardMotion(
         });
       }
     }
-    cancelAnimationFrame(frame.current);
-    frame.current = requestAnimationFrame(paint);
-    if (inHand(d.px, d.py)) {
-      placeInHand(d, d.px, d.py);
-    } else if (d.source !== 'hand' && orderRef.current.includes(INCOMING))
-      update(orderRef.current.filter((id) => id !== INCOMING));
+    if (!frame.current) frame.current = requestAnimationFrame(paint);
   }
   function cleanup() {
     cancelAnimationFrame(frame.current);
+    frame.current = 0;
+    lastPaint.current = 0;
     // A completed drag returns to the normal hand layer, not the selected layer.
     if (active.current?.moved) select(null);
     active.current = null;
@@ -264,6 +322,8 @@ export function useCardMotion(
     d.py = e.clientY;
     if (!cancel && inHand(d.px, d.py)) placeInHand(d, d.px, d.py);
     d.settling = true;
+    cancelAnimationFrame(frame.current);
+    frame.current = 0;
     suppress.current = true;
     if (suppressTimer.current) clearTimeout(suppressTimer.current);
     suppressTimer.current = setTimeout(() => {

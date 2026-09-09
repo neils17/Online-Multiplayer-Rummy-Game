@@ -18,6 +18,7 @@ import {
 import { useCardFlight } from '@/hooks/use-card-flight';
 import { opponentTransition } from '@/lib/transition';
 import { describeGroup, splitGroups, isGroup, GROUP } from '@/lib/arrange';
+import ArrangeWorker from '@/lib/arrange.worker?worker';
 import { useCardMotion, INCOMING } from '@/hooks/use-card-motion';
 import { type Card, rank, suit, isWild } from '@/lib/game';
 type View = {
@@ -412,11 +413,7 @@ export default function Home() {
     if (!hand.length || arranging) return;
     setArranging(true);
     try {
-      if (!arrangeWorker.current)
-        arrangeWorker.current = new Worker(
-          new URL('../lib/arrange.worker.ts', import.meta.url),
-          { type: 'module' },
-        );
+      if (!arrangeWorker.current) arrangeWorker.current = new ArrangeWorker();
       const worker = arrangeWorker.current;
       while (gRef.current) {
         const current = gRef.current;

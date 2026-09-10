@@ -62,7 +62,6 @@ assert.deepEqual(moveToGroup(order, 'c', GROUP + 'a'), [
   'a',
   'b',
   'c',
-  GROUP + 'b',
 ]);
 assert.equal(splitGroups(moveToGroup(order, 'b', GROUP + 'b')).length, 2);
 const duplicate = cards([5, 5, 5], 0);
@@ -121,4 +120,20 @@ assert.deepEqual(removeGroup([GROUP + 'a', 'a'], GROUP + 'a'), [
 ]);
 console.log(
   'PASS: removing first, middle or last groups keeps every card and retains the final group.',
+);
+
+const { pruneEmptiedGroups } = await import('../lib/arrange.ts');
+assert.deepEqual(
+  pruneEmptiedGroups(
+    [GROUP + 'a', GROUP + 'b', 'b', GROUP + 'empty'],
+    [GROUP + 'a', 'a', GROUP + 'b', 'b', GROUP + 'empty'],
+  ),
+  [GROUP + 'b', 'b', GROUP + 'empty'],
+);
+assert.deepEqual(
+  moveToGroup([GROUP + 'a', 'a', GROUP + 'empty'], 'a', GROUP + 'empty'),
+  [GROUP + 'empty', 'a'],
+);
+console.log(
+  'PASS: newly emptied groups disappear while intentional empty drop targets survive.',
 );

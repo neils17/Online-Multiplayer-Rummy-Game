@@ -4,6 +4,7 @@ export type TableSnapshot = {
   round: number;
   me: number;
   status: string;
+  turn?: number;
   pile: Card[];
   players: { count: number; hand: Card[]; name: string }[];
 };
@@ -31,7 +32,10 @@ export function opponentTransition(
     };
   }
   if (
-    b.count < a.count &&
+    (b.count < a.count ||
+      (b.count === a.count &&
+        previous.turn === other &&
+        next.turn === next.me)) &&
     next.pile[0] &&
     previous.pile[0]?.id !== next.pile[0]?.id
   )

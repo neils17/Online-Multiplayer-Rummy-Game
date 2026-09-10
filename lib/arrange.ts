@@ -25,7 +25,18 @@ export function moveToGroup(
   if (end < 0) end = next.length;
   const anchor = before ? next.indexOf(before) : -1;
   next.splice(anchor > start && anchor < end ? anchor : end, 0, card);
-  return next;
+  return pruneEmptiedGroups(next, order);
+}
+// Preserve intentionally created empty targets, but remove a group that lost its last card.
+export function pruneEmptiedGroups(next: string[], previous: string[]) {
+  const occupied = new Set(
+    splitGroups(previous)
+      .filter((g) => g.ids.length)
+      .map((g) => g.id),
+  );
+  return splitGroups(next)
+    .filter((g) => g.ids.length || !occupied.has(g.id))
+    .flatMap((g) => [g.id, ...g.ids]);
 }
 export function removeGroup(order: string[], group: string) {
   const groups = splitGroups(order);

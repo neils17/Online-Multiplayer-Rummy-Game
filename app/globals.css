@@ -3047,3 +3047,265 @@ small,
     --hand-card-width: 82px;
   }
 }
+
+/* Casino surfaces: keep decorative rules outside the playing controls. */
+.casino.game-shell .table-line {
+  display: none;
+}
+.casino.game-shell .actions {
+  border-top: 0;
+}
+.casino.game-shell > footer {
+  border: 0;
+  min-height: 0;
+}
+.casino .table-top .quiet,
+.casino .practice-label {
+  background: #102d21;
+  color: #dec99d;
+  border: 1px solid #94784c;
+  border-radius: 8px;
+  box-shadow: none;
+}
+.casino .table-top strong {
+  color: #f3d891;
+}
+.card-back,
+.playing-card.card-back,
+.casino .deck {
+  background-image: url('/cards/rider-back.jpg');
+  background-size: 100% 100%;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: #fff;
+}
+
+/* A complete, scrollable round review with unobscured card faces. */
+.modal.score-modal {
+  width: min(1000px, calc(100vw - 24px));
+  max-width: 1000px !important;
+  max-height: min(92dvh, 1000px);
+  background: #101f19 !important;
+  border: 1px solid #ac8b50 !important;
+  border-radius: 20px !important;
+  color: #ede4ce !important;
+  padding: 28px !important;
+  box-shadow: 0 24px 100px #0009;
+  overflow-x: hidden;
+}
+.score-modal [data-slot='dialog-title'] {
+  font:
+    600 28px Georgia,
+    serif;
+  padding-right: 28px;
+}
+.score-modal [data-slot='dialog-description'],
+.score-modal small {
+  color: #b7c0b4;
+}
+.score-modal [data-slot='dialog-close'] {
+  color: #ead7aa;
+}
+.score-modal table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.score-modal th,
+.score-modal td {
+  padding: 10px 14px;
+  color: #e9ddc2;
+  border-color: #b9a16a33;
+}
+.score-modal thead,
+.score-modal tfoot {
+  background: #ffffff07;
+}
+.score-modal tbody tr:hover {
+  background: #ffffff04;
+}
+.score-modal tfoot {
+  font-weight: 700;
+}
+.round-review {
+  display: grid;
+  gap: 20px;
+}
+.round-verdict {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid #bba06466;
+  background: #c4a2520d;
+  border-radius: 12px;
+}
+.verdict-suit {
+  font-size: 42px;
+  color: #d8b96d;
+}
+.round-verdict strong {
+  font:
+    600 22px/1.35 Georgia,
+    serif;
+  color: #f1d695;
+}
+.round-verdict p,
+.review-note {
+  margin: 5px 0 0;
+  color: #b7c0b4;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.review-player {
+  border: 1px solid #78978344;
+  border-radius: 14px;
+  background: #173628;
+  padding: 18px;
+  min-width: 0;
+}
+.review-player-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.review-player-heading h3 {
+  font:
+    600 23px Georgia,
+    serif;
+  margin: 0 0 6px;
+  color: #f3e6c9;
+}
+.review-player-heading span {
+  font-size: 14px;
+  color: #b9c7b9;
+}
+.review-score {
+  display: grid;
+  text-align: right;
+  flex-shrink: 0;
+}
+.review-score strong {
+  font-size: 30px;
+  line-height: 1.2;
+  color: #f0d28d;
+  font-variant-numeric: tabular-nums;
+}
+.review-requirements {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 16px 0;
+  font-size: 14px;
+  color: #b9c7b9;
+}
+.review-requirements .met {
+  color: #abdab7;
+}
+.review-groups {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 14px;
+  margin-top: 14px;
+}
+.review-group {
+  max-width: 100%;
+  padding: 12px;
+  border: 1px solid #78978366;
+  border-radius: 10px;
+  background: #0c251b;
+}
+.review-group.group-pure {
+  border-color: #7fbc88;
+}
+.review-group.group-sequence {
+  border-color: #7babb8;
+}
+.review-group.group-set {
+  border-color: #c2a2c7;
+}
+.review-group-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+  color: #ddcfad;
+  font-size: 14px;
+}
+.review-group-label span {
+  color: #a8b8aa;
+}
+.review-cards {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.score-modal .review-cards .playing-card {
+  width: 76px;
+  height: 106.4px;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  box-shadow: 0 3px 7px #0005;
+  border-radius: 10% / 7.142857%;
+}
+.review-group > small {
+  display: block;
+  margin-top: 8px;
+  font-size: 12px;
+}
+.score-next {
+  justify-self: end;
+  position: sticky;
+  bottom: 0;
+  background: #d9b86e;
+  color: #1d271b;
+  border: 1px solid #efcf8b;
+  box-shadow: 0 4px 20px #0005;
+}
+@media (max-width: 600px) {
+  .modal.score-modal {
+    padding: 18px !important;
+  }
+  .score-modal [data-slot='dialog-title'] {
+    font-size: 24px;
+  }
+  .review-player {
+    padding: 12px;
+  }
+  .review-player-heading h3 {
+    font-size: 20px;
+  }
+  .review-score strong {
+    font-size: 26px;
+  }
+  .review-group {
+    padding: 8px;
+  }
+  .score-modal .review-cards .playing-card {
+    width: 62px;
+    height: 86.8px;
+  }
+  .review-cards {
+    gap: 4px;
+  }
+}
+
+/* Explicit rows prevent the hidden hint from pulling buttons into its zero-height row. */
+.casino.game-shell .hand-heading {
+  grid-row: 1;
+}
+.casino.game-shell .hand {
+  grid-row: 2;
+}
+.casino.game-shell .group-progress {
+  grid-row: 3;
+}
+.casino.game-shell .hand-hint {
+  grid-row: 4;
+}
+.casino.game-shell .actions {
+  grid-row: 5;
+  align-self: stretch;
+}

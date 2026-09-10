@@ -52,3 +52,14 @@ assert.equal(visibleDiscard(undefined, null, null), null);
 console.log(
   'PASS: lifting reveals underneath immediately, single-card pile becomes empty, server confirmation does not skip a second card, cancellation restores top.',
 );
+
+const missedDraw = { ...state, turn: 1 };
+const completeTurn = { ...discarded, turn: 0 };
+assert.equal(opponentTransition(missedDraw, completeTurn).kind, 'discard');
+assert.equal(
+  opponentTransition({ ...missedDraw, turn: 0 }, completeTurn),
+  null,
+);
+console.log(
+  'PASS: a rapid opponent turn still animates its discard after a missed intermediate poll.',
+);

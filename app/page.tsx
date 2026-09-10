@@ -15,6 +15,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { RoundHands } from '@/components/game/round-hands';
 import { CardFace as Face, cardAsset } from '@/components/game/card-face';
 import { useCardFlight } from '@/hooks/use-card-flight';
 import { opponentTransition, visibleDiscard } from '@/lib/transition';
@@ -22,6 +23,7 @@ import {
   describeGroup,
   splitGroups,
   removeGroup,
+  pruneEmptiedGroups,
   isGroup,
   GROUP,
 } from '@/lib/arrange';
@@ -65,9 +67,21 @@ export default function Home() {
       image.src = cardAsset(g.underDiscard);
     }
   }, [g?.underDiscard?.id]);
+  useEffect(() => {
+    if (!g?.code) return;
+    for (let s = 0; s < 4; s++)
+      for (let r = 0; r <= 13; r++) {
+        const image = new Image();
+        image.src = cardAsset({ id: '', r, s });
+      }
+  }, [g?.code]);
   const [error, setError] = useState('');
   const [connection, setConnection] = useState(true);
   const [selected, setSelected] = useState<string | null>(null);
+  const [departingCard, setDepartingCard] = useState<string | null>(null);
+  const [landingDiscard, setLandingDiscard] = useState<{
+    card: Card | null;
+  } | null>(null);
   const [liftedDiscard, setLiftedDiscard] = useState<string | null>(null);
   const [order, setOrder] = useState<string[]>([]);
   const groupCounter = useRef(0);
@@ -77,9 +91,17 @@ export default function Home() {
   const handRound = useRef('');
   const [rules, setRules] = useState(false);
   const [scores, setScores] = useState(false);
+  useEffect(() => {
+    if (g?.status === 'ended') setScores(true);
+    else setScores(false);
+  }, [g?.code, g?.round, g?.status]);
   const [confirm, setConfirm] = useState('');
   const inFlight = useRef(false);
   const requestEpoch = useRef(0);
+  const actionQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const pendingActions = useRef(
+    new Map<string, Promise<View | false | undefined>>(),
+  );
   const gRef = useRef<View | null>(null);
   const motionRef = useRef<ReturnType<typeof useCardMotion> | null>(null);
   const flightMotion = useCardFlight();
@@ -129,7 +151,6 @@ export default function Home() {
       );
       if (source && target) {
         presenting.current = true;
-        setBusy(true);
         try {
           if (event.kind === 'draw' && event.open)
             setLiftedDiscard(previous!.pile[0]?.id || null);
@@ -151,13 +172,22 @@ export default function Home() {
               : target.getBoundingClientRect(),
             event.card,
             event.label,
-            () => commit(next),
+            () => {
+              if (event.kind === 'discard') setLandingDiscard(null);
+              else commit(next);
+            },
             event.kind === 'discard' ? source : null,
+            event.kind === 'discard'
+              ? () => {
+                  setLandingDiscard({ card: previous!.pile[0] || null });
+                  commit(next);
+                }
+              : undefined,
           );
         } finally {
           presenting.current = false;
           setLiftedDiscard(null);
-          setBusy(false);
+          setLandingDiscard(null);
         }
         return;
       }
@@ -189,8 +219,18 @@ export default function Home() {
             target.getBoundingClientRect(),
             card,
             'Discarding your card',
-            () => commit(next),
+            () => {
+              if (next.status !== 'playing') commit(next);
+              setLandingDiscard(null);
+              setDepartingCard(null);
+            },
             source,
+            () => {
+              if (next.status === 'playing') {
+                setLandingDiscard({ card: previous.pile[0] || null });
+                commit(next);
+              } else setDepartingCard(card.id);
+            },
           );
           return;
         }
@@ -212,7 +252,7 @@ export default function Home() {
             try {
               await flightMotion.fly(
                 from,
-                to,
+                () => motionRef.current?.incomingRect() || to,
                 card,
                 'Drawing your card',
                 () => {
@@ -228,6 +268,13 @@ export default function Home() {
         }
       }
     }
+    if (action === 'draw' && previous) {
+      const drawn = next.players[next.me].hand.find(
+        (c) =>
+          !previous.players[previous.me].hand.some((old) => old.id === c.id),
+      );
+      if (drawn) motionRef.current?.reveal(drawn);
+    }
     commit(next);
   }
   useEffect(() => {
@@ -238,14 +285,12 @@ export default function Home() {
       setCode(new URLSearchParams(location.search).get('room') || '');
     } catch {}
   }, []);
-  async function call(
+  async function executeCall(
     action: string,
     cardId?: string,
     current = seat,
     animate?: () => Promise<void>,
   ) {
-    if (presenting.current) return;
-    if (action !== 'poll' && inFlight.current) return;
     if (action !== 'poll') {
       requestEpoch.current++;
       inFlight.current = true;
@@ -296,6 +341,32 @@ export default function Home() {
       }
     }
   }
+  function call(
+    action: string,
+    cardId?: string,
+    current = seat,
+    animate?: () => Promise<void>,
+  ) {
+    if (action === 'poll') {
+      if (pendingActions.current.size || inFlight.current || presenting.current)
+        return Promise.resolve(false as const);
+      const poll = actionQueue.current.then(() =>
+        executeCall(action, cardId, current, animate),
+      );
+      actionQueue.current = poll.catch(() => undefined);
+      return poll;
+    }
+    const key = `${current?.code || code}/${action}/${cardId || ''}`;
+    const pending = pendingActions.current.get(key);
+    if (pending) return pending;
+    const request = actionQueue.current.then(() =>
+      executeCall(action, cardId, current, animate),
+    );
+    pendingActions.current.set(key, request);
+    actionQueue.current = request.catch(() => undefined);
+    void request.finally(() => pendingActions.current.delete(key));
+    return request;
+  }
   useEffect(() => {
     if (!seat) return;
     let stopped = false;
@@ -327,10 +398,14 @@ export default function Home() {
       const retained = old.filter(
         (id) => isGroup(id) || id === INCOMING || hand.some((c) => c.id === id),
       );
-      return [
-        ...(retained.some(isGroup) ? retained : [GROUP + 'a']),
-        ...hand.filter((c) => !retained.includes(c.id)).map((c) => c.id),
-      ];
+      const next = pruneEmptiedGroups(
+        [
+          ...(retained.some(isGroup) ? retained : [GROUP + 'a']),
+          ...hand.filter((c) => !retained.includes(c.id)).map((c) => c.id),
+        ],
+        old,
+      );
+      return next.join('|') === old.join('|') ? old : next;
     });
   }, [handKey, g?.code, g?.round]);
   const mine = !!g && g.turn === g.me && g.status === 'playing';
@@ -365,16 +440,23 @@ export default function Home() {
     setOrder,
     setSelected,
     async (source) => {
+      const before = gRef.current?.players[gRef.current.me].hand || [];
       const result = await call(source);
       if (!result) return null;
       return (
         result.players[result.me].hand.find(
-          (c) => !hand.some((old) => old.id === c.id),
+          (c) => !before.some((old) => old.id === c.id),
         ) || null
       );
     },
     async (id, animate) => {
-      if (!mayDiscard) {
+      const latest = gRef.current;
+      if (
+        !latest ||
+        latest.status !== 'playing' ||
+        latest.turn !== latest.me ||
+        latest.phase !== 'discard'
+      ) {
         setError('Draw a card on your turn before discarding.');
         return false;
       }
@@ -384,11 +466,13 @@ export default function Home() {
   );
   motionRef.current = motion;
   const drag = motion.drag;
-  const discardFace = visibleDiscard(
-    g?.pile[0],
-    g?.underDiscard,
-    drag?.source === 'open' ? drag.face?.id : liftedDiscard,
-  );
+  const discardFace = landingDiscard
+    ? landingDiscard.card
+    : visibleDiscard(
+        g?.pile[0],
+        g?.underDiscard,
+        drag?.source === 'open' ? drag.face?.id : liftedDiscard,
+      );
   const handGroups = splitGroups(order).map((group) => ({
     ...group,
     cards: group.ids
@@ -758,7 +842,7 @@ export default function Home() {
                   </div>
                   <button
                     className="pile-item pile-button"
-                    disabled={!mine || g.phase !== 'draw' || busy}
+                    disabled={!mine || g.phase !== 'draw'}
                     onPointerDown={(e) =>
                       motion.start(e, 'draw', INCOMING, null)
                     }
@@ -777,7 +861,6 @@ export default function Home() {
                       if (
                         mine &&
                         g.phase === 'draw' &&
-                        !busy &&
                         !!g.pile[0] &&
                         !isWild(g.pile[0], g.wild.r)
                       )
@@ -790,7 +873,9 @@ export default function Home() {
                         : call('open')
                     }
                     disabled={
-                      busy || !mine || (g.phase === 'draw' && !g.pile[0])
+                      !mine ||
+                      (g.phase === 'draw' &&
+                        (!g.pile[0] || isWild(g.pile[0], g.wild.r)))
                     }
                   >
                     <div
@@ -826,7 +911,6 @@ export default function Home() {
                           !hand.length ||
                           handGroups.length >= hand.length + 1 ||
                           !!drag ||
-                          !!flightMotion.flight ||
                           arranging
                         }
                         onClick={() => {
@@ -853,12 +937,7 @@ export default function Home() {
                       </button>
                       <button
                         className="arrange-button"
-                        disabled={
-                          !hand.length ||
-                          !!drag ||
-                          !!flightMotion.flight ||
-                          arranging
-                        }
+                        disabled={!hand.length || !!drag || arranging}
                         onClick={arrange}
                       >
                         {arranging ? 'Arranging…' : '✦ Arrange'}
@@ -894,10 +973,7 @@ export default function Home() {
                                 className="remove-group"
                                 aria-label={`Remove ${info.label.toLowerCase()} group; keep its cards`}
                                 disabled={
-                                  handGroups.length < 2 ||
-                                  !!drag ||
-                                  !!flightMotion.flight ||
-                                  arranging
+                                  handGroups.length < 2 || !!drag || arranging
                                 }
                                 onClick={() =>
                                   motion.sort(removeGroup(order, group.id))
@@ -914,7 +990,7 @@ export default function Home() {
                                 aria-label={`${rank(c.r)} ${suit[c.s]}`}
                                 aria-pressed={selected === c.id}
                                 key={c.id}
-                                className={`playing-card hand-card ${c.s % 2 ? 'red' : ''} ${selected === c.id ? 'selected' : ''} ${drag?.id === c.id ? 'drag-source' : ''} ${c.id === INCOMING ? 'incoming-slot' : ''}`}
+                                className={`playing-card hand-card ${c.s % 2 ? 'red' : ''} ${selected === c.id ? 'selected' : ''} ${drag?.id === c.id || departingCard === c.id ? 'drag-source' : ''} ${c.id === INCOMING ? 'incoming-slot' : ''}`}
                                 onPointerDown={(e) => {
                                   if (c.id !== INCOMING)
                                     motion.start(e, 'hand', c.id, c);
@@ -957,7 +1033,7 @@ export default function Home() {
                   <div className="actions">
                     <button
                       className="quiet"
-                      disabled={busy || g.status !== 'playing'}
+                      disabled={g.status !== 'playing'}
                       onClick={() => setConfirm('drop')}
                     >
                       Drop round
@@ -971,13 +1047,15 @@ export default function Home() {
                         <>
                           <button
                             className="secondary"
-                            disabled={!mayDiscard || !selected || busy}
+                            disabled={
+                              !mayDiscard || !selected || selected === g.picked
+                            }
                             onClick={() => call('discard', selected!)}
                           >
                             Discard
                           </button>
                           <button
-                            disabled={!mayDiscard || hand.length !== 14 || busy}
+                            disabled={!mayDiscard || hand.length !== 14}
                             onClick={() => call('declare')}
                           >
                             Declare hand ↗
@@ -1102,8 +1180,12 @@ export default function Home() {
         </DialogContent>
       </Dialog>
       <Dialog open={scores} onOpenChange={setScores}>
-        <DialogContent className="modal wide">
-          <DialogTitle>The scorecard</DialogTitle>
+        <DialogContent className="modal wide score-modal">
+          <DialogTitle>
+            {g?.status === 'ended'
+              ? `Round ${g.round} · Table results`
+              : 'The scorecard'}
+          </DialogTitle>
           <DialogDescription>
             Penalty points · Lower is better
           </DialogDescription>
@@ -1145,20 +1227,16 @@ export default function Home() {
                   </TableRow>
                 </TableFooter>
               </Table>
-              {g.status === 'ended' &&
-                g.players.map((p, i) => (
-                  <div key={i}>
-                    <strong>{p.name}’s hand</strong>
-                    <p className="revealed">
-                      {p.hand.map((c) => (
-                        <span key={c.id} className={c.s % 2 ? 'red' : ''}>
-                          {rank(c.r)}
-                          {suit[c.s]}
-                        </span>
-                      ))}
-                    </p>
-                  </div>
-                ))}
+              {g.status === 'ended' && <RoundHands game={g} />}
+              {g.status === 'ended' && (
+                <button
+                  className="score-next"
+                  disabled={busy}
+                  onClick={() => call('next')}
+                >
+                  Play next round ↗
+                </button>
+              )}
             </>
           )}
         </DialogContent>

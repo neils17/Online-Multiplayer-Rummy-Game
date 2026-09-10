@@ -4,7 +4,6 @@ import { flushSync } from 'react-dom';
 import type { Card } from '@/lib/game';
 export type Flight = {
   from: DOMRect;
-  to: DOMRect;
   card: Card | null;
   label: string;
   width: number;
@@ -13,71 +12,96 @@ export type Flight = {
 export function useCardFlight() {
   const [flight, setFlight] = useState<Flight | null>(null);
   const element = useRef<HTMLDivElement>(null);
-  const running = useRef<Animation | null>(null);
   const alive = useRef(true);
+  const cancel = useRef<(() => void) | null>(null);
   useEffect(() => {
     alive.current = true;
     return () => {
       alive.current = false;
-      running.current?.cancel();
+      cancel.current?.();
     };
   }, []);
   async function fly(
     from: DOMRect,
-    to: DOMRect,
+    destination: DOMRect | (() => DOMRect),
     card: Card | null,
     label: string,
     commit: () => void,
     source?: HTMLElement | null,
+    begin?: () => void,
   ) {
     if (!alive.current) return;
-    const visibility = source?.style.visibility;
+    // The action queue owns flight order; each flight cleans up its own layer.
+    cancel.current?.();
+    const target = () =>
+      typeof destination === 'function' ? destination() : destination;
+    const to = target();
     const width = Math.max(from.width, to.width),
       height = Math.max(from.height, to.height);
-    flushSync(() => setFlight({ from, to, card, label, width, height }));
+    const visibility = source?.style.visibility;
+    flushSync(() => {
+      setFlight({ from, card, label, width, height });
+      begin?.();
+    });
     if (source) source.style.visibility = 'hidden';
-    await new Promise<void>((r) =>
-      requestAnimationFrame(() => requestAnimationFrame(() => r())),
-    );
-    const el = element.current;
-    if (el && alive.current) {
-      const dx = to.left - from.left,
-        dy = to.top - from.top;
-      const sx = to.width / width,
-        sy = to.height / height,
-        startX = from.width / width,
-        startY = from.height / height;
-      // Sample one continuous arc so direction and rotation never kink mid-flight.
-      const frames = Array.from({ length: 31 }, (_, index) => {
-        const t = index / 30;
-        const x = dx * t;
-        const y = dy * t - 60 * t * (1 - t);
-        const turn = Math.sin(Math.PI * t) * (dx < 0 ? -4 : 4);
-        return {
-          offset: t,
-          transform: `translate3d(${x}px,${y}px,0) rotate(${turn}deg) scale(${startX + (sx - startX) * t},${startY + (sy - startY) * t})`,
+    try {
+      await new Promise<void>((resolve) => {
+        const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+        let raf = 0,
+          previous = 0,
+          elapsed = 0;
+        const position = [from.left, from.top, from.width, from.height];
+        const velocity = [0, 0, 0, 0];
+        const stop = () => {
+          cancelAnimationFrame(raf);
+          resolve();
         };
+        cancel.current = stop;
+        const tick = (now: number) => {
+          if (!alive.current) {
+            stop();
+            return;
+          }
+          const dt = Math.min((now - (previous || now - 16.67)) / 1000, 0.032);
+          previous = now;
+          elapsed += dt;
+          const r = target(),
+            goal = [r.left, r.top, r.width, r.height];
+          // Analytic critically damped spring: continuous velocity even if Arrange
+          // or a hand drag changes the receiving slot during the flight.
+          const omega = 18,
+            decay = Math.exp(-omega * dt);
+          for (let i = 0; i < 4; i++) {
+            const delta = position[i] - goal[i];
+            const coefficient = velocity[i] + omega * delta;
+            position[i] = goal[i] + (delta + coefficient * dt) * decay;
+            velocity[i] = (velocity[i] - omega * coefficient * dt) * decay;
+          }
+          const settled =
+            position.every((p, i) => Math.abs(p - goal[i]) < 0.2) &&
+            velocity.every((v) => Math.abs(v) < 3);
+          if (reduced || (elapsed > 0.35 && settled)) {
+            if (element.current)
+              element.current.style.transform = `translate3d(${r.left - from.left}px,${r.top - from.top}px,0) scale(${r.width / width},${r.height / height})`;
+            stop();
+            return;
+          }
+          const tilt = Math.max(-3, Math.min(3, velocity[0] / 140));
+          if (element.current)
+            element.current.style.transform = `translate3d(${position[0] - from.left}px,${position[1] - from.top}px,0) rotate(${tilt}deg) scale(${position[2] / width},${position[3] / height})`;
+          raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
       });
-      const animation = el.animate(frames, {
-        duration: matchMedia('(prefers-reduced-motion: reduce)').matches
-          ? 0
-          : Math.min(680, 440 + Math.hypot(dx, dy) * 0.22),
-        easing: 'cubic-bezier(.22,.61,.36,1)',
-        fill: 'forwards',
-      });
-      running.current = animation;
-      try {
-        await animation.finished;
-      } catch {}
-    }
-    if (alive.current) {
-      flushSync(() => {
-        commit();
-        setFlight(null);
-      });
+      if (alive.current)
+        flushSync(() => {
+          commit();
+          setFlight(null);
+        });
+    } finally {
       if (source) source.style.visibility = visibility || '';
+      cancel.current = null;
     }
-    running.current = null;
   }
   return { flight, element, fly };
 }

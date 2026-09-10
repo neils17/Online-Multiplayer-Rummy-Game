@@ -1,6 +1,7 @@
 'use client';
 import { useLayoutEffect, useRef, useState, useEffect } from 'react';
-import { moveToGroup } from '@/lib/arrange';
+import { moveToGroup, pruneEmptiedGroups } from '@/lib/arrange';
+import { flushSync } from 'react-dom';
 import type { Card } from '@/lib/game';
 export const INCOMING = '__incoming';
 type Source = 'hand' | 'draw' | 'open';
@@ -38,6 +39,7 @@ export function useCardMotion(
   const frame = useRef(0);
   const lastPaint = useRef(0);
   const suppress = useRef(false);
+  const suppressAt = useRef({ x: 0, y: 0 });
   const suppressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const elements = () =>
     Array.from(
@@ -49,6 +51,7 @@ export function useCardMotion(
     );
   }
   function update(next: string[]) {
+    next = pruneEmptiedGroups(next, orderRef.current);
     if (next.join('|') === orderRef.current.join('|')) return;
     snapshot();
     orderRef.current = next;
@@ -69,28 +72,7 @@ export function useCardMotion(
     targets.forEach(({ el, r }, index) => {
       const old = starts.get(el);
       if (el.dataset.card === active.current?.id) return;
-      if (!old) {
-        if (
-          el.dataset.card !== INCOMING &&
-          !previous.has(INCOMING) &&
-          !active.current
-        ) {
-          const animation = el.animate(
-            [
-              { opacity: 0, translate: '0px 10px' },
-              { opacity: 1, translate: '0px 0px' },
-            ],
-            {
-              duration: 320,
-              delay: index * 18,
-              easing: 'cubic-bezier(.2,.75,.2,1)',
-              fill: 'backwards',
-            },
-          );
-          animations.current.set(el, animation);
-        }
-        return;
-      }
+      if (!old) return;
       const x = old.left - r.left,
         y = old.top - r.top;
       if (Math.abs(x) + Math.abs(y) < 1) return;
@@ -167,8 +149,17 @@ export function useCardMotion(
       original: [...orderRef.current],
     };
     active.current = d;
-    // Lift the known discard face immediately, including before the drag threshold.
-    if (source === 'open') setDrag({ ...d });
+    // A closed-deck pointer press commits exactly one draw. The server reveals
+    // only the card now owned by this player; no deck preview is exposed.
+    if (source !== 'hand') setDrag({ ...d });
+    if (source === 'draw')
+      d.drawRequest = onDraw('draw').then((card) => {
+        if (card && active.current === d) {
+          d.face = card;
+          setDrag({ ...d });
+        }
+        return card;
+      });
     e.currentTarget.closest('main')?.setPointerCapture(e.pointerId);
   }
   function inHand(x: number, y: number) {
@@ -246,17 +237,6 @@ export function useCardMotion(
       d.moved = true;
       setDrag({ ...d });
       if (d.source === 'hand') select(d.id);
-      if (d.source === 'draw') {
-        // Commit the draw on lift: a revealed card can never be returned to the deck.
-        d.drawRequest = onDraw('draw').then((card) => {
-          if (card && active.current === d) {
-            d.face = card;
-            update(orderRef.current.filter((id) => id !== card.id));
-            setDrag({ ...d });
-          }
-          return card;
-        });
-      }
     }
     if (!frame.current) frame.current = requestAnimationFrame(paint);
   }
@@ -265,7 +245,11 @@ export function useCardMotion(
     frame.current = 0;
     lastPaint.current = 0;
     // A completed drag returns to the normal hand layer, not the selected layer.
-    if (active.current?.moved) select(null);
+    if (
+      active.current &&
+      (active.current.moved || active.current.source !== 'hand')
+    )
+      select(null);
     active.current = null;
     setDrag(null);
   }
@@ -296,7 +280,9 @@ export function useCardMotion(
     try {
       await animation.finished;
     } catch {}
-    if (!keep) cleanup();
+    if (!keep) flushSync(cleanup);
+    // Remove finished fill-forwards effects after the real card takes over.
+    if (!keep) animation.cancel();
   }
   const nextFrame = () =>
     new Promise<void>((resolve) =>
@@ -305,8 +291,9 @@ export function useCardMotion(
   async function end(e: React.PointerEvent<HTMLElement>, cancel = false) {
     const d = active.current;
     if (!d || d.settling || e.pointerId !== d.pointerId) return;
-    if (!d.moved) {
+    if (!d.moved && d.source !== 'draw') {
       suppress.current = true;
+      suppressAt.current = { x: e.clientX, y: e.clientY };
       if (suppressTimer.current) clearTimeout(suppressTimer.current);
       suppressTimer.current = setTimeout(() => {
         suppress.current = false;
@@ -325,6 +312,7 @@ export function useCardMotion(
     cancelAnimationFrame(frame.current);
     frame.current = 0;
     suppress.current = true;
+    suppressAt.current = { x: e.clientX, y: e.clientY };
     if (suppressTimer.current) clearTimeout(suppressTimer.current);
     suppressTimer.current = setTimeout(() => {
       suppress.current = false;
@@ -361,6 +349,23 @@ export function useCardMotion(
           .map((c) => (c === INCOMING ? id : c)),
       );
       setDrag({ ...d });
+      const discard =
+        !cancel && d.source === 'draw'
+          ? document
+              .elementFromPoint(d.px, d.py)
+              ?.closest<HTMLElement>('[data-drop="discard"]')
+          : null;
+      if (discard) {
+        const rect = discard
+          .querySelector('.playing-card')!
+          .getBoundingClientRect();
+        const ok = await onDiscard(id, () => land(rect, true));
+        if (active.current !== d) return;
+        if (ok) {
+          flushSync(cleanup);
+          return;
+        }
+      }
       await nextFrame();
       const target = elements().find((el) => el.dataset.card === id);
       await land(target?.getBoundingClientRect() || d.origin);
@@ -385,7 +390,14 @@ export function useCardMotion(
     await land(slot?.getBoundingClientRect() || d.origin);
   }
   function click(e: React.MouseEvent) {
-    if (suppress.current) {
+    if (
+      suppress.current &&
+      e.detail !== 0 &&
+      Math.hypot(
+        e.clientX - suppressAt.current.x,
+        e.clientY - suppressAt.current.y,
+      ) < 8
+    ) {
       e.preventDefault();
       e.stopPropagation();
       suppress.current = false;
@@ -413,9 +425,27 @@ export function useCardMotion(
     move,
     end,
     click,
-    sort: (next: string[]) => update(next),
+    sort: (next: string[]) =>
+      update(
+        orderRef.current.includes(INCOMING) && !next.includes(INCOMING)
+          ? [...next, INCOMING]
+          : next,
+      ),
     capture: snapshot,
-    isDragging: () => !!active.current?.moved,
+    isDragging: () =>
+      !!active.current &&
+      (active.current.moved || active.current.source === 'draw'),
+    reveal: (card: Card) => {
+      const d = active.current;
+      if (d?.source === 'draw') {
+        d.face = card;
+        setDrag({ ...d });
+      }
+    },
+    incomingRect: () =>
+      elements()
+        .find((el) => el.dataset.card === INCOMING)
+        ?.getBoundingClientRect(),
     reserve: async () => {
       update([...orderRef.current.filter((id) => id !== INCOMING), INCOMING]);
       await nextFrame();

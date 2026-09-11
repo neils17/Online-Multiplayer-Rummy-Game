@@ -13,7 +13,7 @@ for (let s = 0; s < 4; s++)
       React.createElement(CardFace, { c: card }),
     );
     assert.ok(html.includes(path));
-    assert.ok(html.includes('class="deck-face"'));
+    assert.ok(html.includes('class="deck-face'));
     assert.ok(!html.includes('court-half') && !html.includes('<svg'));
     const asset = await readFile(`public${path}`, 'utf8');
     assert.ok(asset.includes('viewBox="-120 -168 240 336"'));
@@ -46,7 +46,7 @@ assert.equal(paths.size, 52);
 const joker = renderToStaticMarkup(
   React.createElement(CardFace, { c: { id: 'j', r: 0, s: 0 }, w: 8 }),
 );
-assert.ok(joker.includes('/cards/J-1.svg'));
+assert.ok(joker.includes('/cards/jester.webp'));
 assert.ok(joker.includes('wild-marker'));
 assert.ok(
   (await readFile('public/cards/LICENSE.txt', 'utf8')).includes(

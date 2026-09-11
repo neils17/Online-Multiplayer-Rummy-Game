@@ -3515,3 +3515,6 @@ small,
   background-size: 100% 100%;
   background-position: center;
 }
+
+/* Preserve the complete supplied Joker illustration, including both stars. */
+.playing-card .deck-face.joker-art { object-fit: contain; background: #e9ddbd; }

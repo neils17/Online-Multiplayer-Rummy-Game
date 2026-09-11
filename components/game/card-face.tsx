@@ -2,13 +2,13 @@ import { isWild, rank, type Card } from '@/lib/game';
 export function cardAsset(c: Card) {
   return c.r
     ? `/cards/${['S', 'H', 'C', 'D'][c.s]}-${rank(c.r)}.svg`
-    : '/cards/J-1.svg';
+    : '/cards/jester.webp';
 }
 export function CardFace({ c, w }: { c: Card; w?: number }) {
   return (
     <>
       <img
-        className="deck-face"
+        className={`deck-face ${c.r === 0 ? 'joker-art' : ''}`}
         src={cardAsset(c)}
         alt=""
         draggable={false}

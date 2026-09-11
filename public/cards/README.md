@@ -8,3 +8,5 @@ Original card designs by Adrian Kennard; packaged by Letele Motebang.
 License: CC0 1.0 Universal. See LICENSE.txt.
 
 The displayed red card back (`rider-back.jpg`) is the user-supplied 5075a.jpg reference, fitted to the rounded card container. It is separate from the CC0 SVG deck attribution above.
+
+The Ace of Spades has its two URL-text lines removed. The displayed printed Joker uses the user-supplied `jester.webp` illustration; this asset is separate from the CC0 SVG deck.

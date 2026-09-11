@@ -98,7 +98,8 @@ export function deal(g: Game) {
     p.hand = d.splice(0, 13);
     p.draws = 0;
   });
-  g.pile = d.splice(0, 1).map((c) => droppedCard(c, g.wild));
+  // The opening card was dealt, not discarded by a player: keep it wild.
+  g.pile = d.splice(0, 1);
   g.deck = d;
   g.round++;
   g.turn = (g.round - 1) % 2;
@@ -377,7 +378,7 @@ export function act(g: Game, i: number, a: string, cardId?: string) {
     }
     const c = (a === 'draw' ? g.deck : g.pile).pop();
     if (!c) throw Error('No card available.');
-    p.hand.push(a === 'open' ? droppedCard(c, g.wild) : c);
+    p.hand.push(c);
     p.draws++;
     g.picked = a === 'open' ? c.id : null;
     g.phase = 'discard';

@@ -73,9 +73,9 @@ assert.equal(j.pile.length, 0);
 assert.equal(j.players[1].hand.length, 14);
 const fixed = j.players[1].hand.at(-1);
 assert.equal(fixed.id, 'joker');
-assert.equal(fixed.r, 5);
+assert.equal(fixed.r, 0);
 assert.equal(fixed.s, 0);
-assert.equal(fixed.naturalOnly, true);
+assert.equal(fixed.naturalOnly, undefined);
 console.log(
   'PASS: delayed turns, draw/discard counts, legal discards, joker handling, winning declaration and bot starting the next round.',
 );

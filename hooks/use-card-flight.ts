@@ -99,7 +99,12 @@ export function useCardFlight() {
           setFlight(null);
         });
     } finally {
-      if (source) source.style.visibility = visibility || '';
+      if (
+        source &&
+        (source.dataset.opponentSlot === undefined ||
+          source.dataset.opponentCard !== undefined)
+      )
+        source.style.visibility = visibility || '';
       cancel.current = null;
     }
   }

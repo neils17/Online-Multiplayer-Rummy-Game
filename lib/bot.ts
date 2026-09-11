@@ -1,7 +1,6 @@
 import {
   act,
   winningDiscard,
-  droppedCard,
   isWild,
   meld,
   value,
@@ -66,7 +65,7 @@ export function advanceBot(g: Game, now = Date.now()) {
   if (g.status !== 'playing' || !p?.bot || now < (g.botAt ?? 0)) return false;
   if (g.phase === 'draw') {
     const visible = g.pile.at(-1);
-    const top = visible ? droppedCard(visible, g.wild) : undefined;
+    const top = visible;
     let takeOpen = false;
     if (top) {
       const combined = [...p.hand, top];

@@ -27,6 +27,7 @@ export function useCardMotion(
   onDraw: (source: 'draw' | 'open') => Promise<Card | null>,
   onDiscard: (id: string, animate: () => Promise<void>) => Promise<boolean>,
   gameKey: string,
+  onDoubleTap?: (id: string) => void,
 ) {
   const [drag, setDrag] = useState<Gesture | null>(null);
   const active = useRef<Gesture | null>(null);
@@ -37,7 +38,12 @@ export function useCardMotion(
   const animations = useRef(new Map<HTMLElement, Animation>());
   const frame = useRef(0);
   const landingDone = useRef<(() => void) | null>(null);
-  const lastPaint = useRef(0);
+  const lastTap = useRef<{
+    id: string;
+    time: number;
+    x: number;
+    y: number;
+  } | null>(null);
   const suppress = useRef(false);
   const suppressAt = useRef({ x: 0, y: 0 });
   const suppressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -73,17 +79,29 @@ export function useCardMotion(
       const old = starts.get(el);
       if (el.dataset.card === active.current?.id) return;
       if (!old) return;
-      const x = old.left - r.left,
-        y = old.top - r.top;
-      if (Math.abs(x) + Math.abs(y) < 1) return;
+      const scale = el.offsetWidth ? r.width / el.offsetWidth : 1;
+      const x = (old.left - r.left) / scale,
+        y = (old.top - r.top) / scale;
+      if (Math.abs(x) + Math.abs(y) < 1 && Math.abs(old.width - r.width) < 0.2)
+        return;
       const animation = el.animate(
-        [{ translate: `${x}px ${y}px` }, { translate: '0px 0px' }],
+        [
+          {
+            translate: `${x}px ${y}px`,
+            scale: `${old.width / r.width} ${old.height / r.height}`,
+          },
+          { translate: '0px 0px', scale: '1 1' },
+        ],
         { duration: 340, easing: 'cubic-bezier(.2,.75,.2,1)' },
       );
       animations.current.set(el, animation);
+      animation.onfinish = () => {
+        if (animations.current.get(el) === animation)
+          animations.current.delete(el);
+      };
     });
   }, [order]);
-  function paint(now = performance.now()) {
+  function paint() {
     frame.current = 0;
     const d = active.current,
       el = ghost.current;
@@ -95,22 +113,8 @@ export function useCardMotion(
       : Math.max(-7, Math.min(7, dx / 32));
     el.style.transform = `translate3d(${dx}px,${dy}px,0) rotate(${tilt}deg) scale(1.025)`;
     if (d.moved && !d.settling) {
-      const dt = Math.min(
-        32,
-        Math.max(1, now - (lastPaint.current || now - 16)),
-      );
-      lastPaint.current = now;
       const rail = hand.current;
       if (rail && inHand(d.px, d.py)) {
-        const rect = rail.getBoundingClientRect();
-        const speed = (point: number, start: number, end: number) =>
-          point < start + 32
-            ? -Math.min(1, (start + 32 - point) / 32)
-            : point > end - 32
-              ? Math.min(1, (point - end + 32) / 32)
-              : 0;
-        rail.scrollLeft += speed(d.px, rect.left, rect.right) * dt * 0.55;
-        rail.scrollTop += speed(d.py, rect.top, rect.bottom) * dt * 0.55;
         placeInHand(d, d.px, d.py);
       } else if (d.source !== 'hand' && orderRef.current.includes(INCOMING)) {
         update(orderRef.current.filter((id) => id !== INCOMING));
@@ -210,14 +214,15 @@ export function useCardMotion(
     for (const [index, el] of els.entries()) {
       const p = (el.offsetParent as HTMLElement)?.getBoundingClientRect();
       if (!p) continue;
-      const left =
-        p.left + el.offsetLeft - (el.offsetParent as HTMLElement).scrollLeft;
+      const parent = el.offsetParent as HTMLElement;
+      const scale = parent.offsetWidth ? p.width / parent.offsetWidth : 1;
+      const left = p.left + el.offsetLeft * scale;
       const nextCard = els[index + 1];
       const step = nextCard
         ? el.offsetWidth +
           parseFloat(getComputedStyle(nextCard).marginLeft || '0')
         : el.offsetWidth;
-      if (x < left + step / 2) {
+      if (x < left + (step * scale) / 2) {
         anchor = el.dataset.card;
         break;
       }
@@ -244,7 +249,6 @@ export function useCardMotion(
     landingDone.current = null;
     cancelAnimationFrame(frame.current);
     frame.current = 0;
-    lastPaint.current = 0;
     active.current = null;
     setDrag(null);
   }
@@ -323,8 +327,22 @@ export function useCardMotion(
       }, 500);
       cleanup();
       if (!cancel && d.source !== 'hand') await onDraw(d.source);
+      if (!cancel && d.source === 'hand') {
+        const now = performance.now(),
+          tap = lastTap.current;
+        if (
+          tap?.id === d.id &&
+          now - tap.time < 350 &&
+          Math.hypot(tap.x - e.clientX, tap.y - e.clientY) < 20
+        ) {
+          lastTap.current = null;
+          onDoubleTap?.(d.id);
+        } else
+          lastTap.current = { id: d.id, time: now, x: e.clientX, y: e.clientY };
+      } else lastTap.current = null;
       return;
     }
+    lastTap.current = null;
     d.px = e.clientX;
     d.py = e.clientY;
     if (!cancel && inHand(d.px, d.py)) placeInHand(d, d.px, d.py);
@@ -445,6 +463,7 @@ export function useCardMotion(
       update(orderRef.current.filter((id) => id !== INCOMING));
       cleanup();
     }
+    lastTap.current = null;
   }, [gameKey]);
   return {
     drag,
@@ -461,6 +480,11 @@ export function useCardMotion(
           : next,
       ),
     capture: snapshot,
+    reset: () => {
+      before.current.clear();
+      animations.current.forEach((a) => a.cancel());
+      animations.current.clear();
+    },
     isDragging: () =>
       !!active.current &&
       (active.current.moved || active.current.source === 'draw'),

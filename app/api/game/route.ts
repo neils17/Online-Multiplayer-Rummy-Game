@@ -1,7 +1,7 @@
 import { getDb } from '@/db';
 import { rooms } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { act, deal, droppedCard, gameOptions, type Game } from '@/lib/game';
+import { act, deal, gameOptions, type Game } from '@/lib/game';
 import { advanceBot, scheduleBot } from '@/lib/bot';
 const reply = (data: unknown, status = 200) =>
   Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -21,8 +21,8 @@ function view(g: Game, i: number, code: string, revision = 0) {
     deck: undefined,
     botAt: undefined,
     remaining: g.deck.length,
-    pile: g.pile.slice(-1).map((c) => droppedCard(c, g.wild)),
-    underDiscard: g.pile.at(-2) ? droppedCard(g.pile.at(-2)!, g.wild) : null,
+    pile: g.pile.slice(-1),
+    underDiscard: g.pile.at(-2) || null,
     players: g.players.map((p, j) => ({
       name: p.bot ? 'Rummy Bot' : p.name,
       bot: !!p.bot,

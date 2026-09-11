@@ -212,3 +212,87 @@ for (let i = 0; i < 30; i++) {
 console.log(
   'PASS: 30 consecutive retargeted flights land precisely and clean up their source/layer.',
 );
+
+// Pointer-level double taps work for touch and mouse even when native clicks
+// are suppressed after pointer capture. Single taps never discard or declare.
+{
+  const discarded = [];
+  const motion = useCardMotion(
+    ['~group:a', 'a', 'b'],
+    () => {},
+    async () => null,
+    async () => false,
+    'double-tap',
+    (id) => discarded.push(id),
+  );
+  const target = {
+    ...element(rect(10, 300)),
+    closest: () => ({ setPointerCapture() {} }),
+  };
+  const tap = async (id, x = 20) => {
+    motion.start(event(x, 320, target), 'hand', id, { id, r: 4, s: 0 });
+    await motion.end(event(x, 320, target));
+  };
+  await tap('a');
+  assert.deepEqual(discarded, []);
+  await tap('a');
+  assert.deepEqual(discarded, ['a']);
+  await tap('a');
+  await tap('b');
+  assert.deepEqual(discarded, ['a']);
+  await tap('b');
+  assert.deepEqual(discarded, ['a', 'b']);
+  await new Promise((r) => setTimeout(r, 510));
+  console.log(
+    'PASS: double-tap discards once; single taps and taps on different cards do not discard.',
+  );
+}
+{
+  let order = ['~group:a', 'a', 'b', 'c'];
+  const group = {
+    dataset: { handGroup: '~group:a' },
+    offsetWidth: 180,
+    getBoundingClientRect: () => rect(100, 300, 90, 80),
+    querySelectorAll: () =>
+      order.filter((id) => !id.startsWith('~')).map(cardElement),
+  };
+  function cardElement(id) {
+    const index = order.filter((id) => !id.startsWith('~')).indexOf(id);
+    return {
+      ...element(rect(100 + index * 22.5, 300, 45, 63), { card: id }),
+      offsetWidth: 90,
+      offsetLeft: index * 45,
+      offsetParent: group,
+      closest: () => ({ setPointerCapture() {} }),
+    };
+  }
+  globalThis.getComputedStyle = () => ({ marginLeft: '-45' });
+  const motion = useCardMotion(
+    order,
+    (next) => {
+      order = next;
+    },
+    async () => null,
+    async () => false,
+    'scaled-hand',
+  );
+  motion.hand.current = {
+    getBoundingClientRect: () => rect(90, 290, 160, 100),
+    querySelectorAll: (selector) =>
+      selector === '[data-card]' ? group.querySelectorAll() : [group],
+  };
+  motion.ghost.current = element(rect(100, 300, 45, 63));
+  hitDiscard = false;
+  motion.start(event(105, 320, cardElement('a')), 'hand', 'a', {
+    id: 'a',
+    r: 3,
+    s: 0,
+  });
+  motion.move(event(140, 320, cardElement('a')));
+  await motion.end(event(140, 320, cardElement('a')));
+  assert.deepEqual(order, ['~group:a', 'b', 'a', 'c']);
+  await new Promise((r) => setTimeout(r, 510));
+  console.log(
+    'PASS: a half-scale mobile hand inserts at the correct physical pointer position.',
+  );
+}

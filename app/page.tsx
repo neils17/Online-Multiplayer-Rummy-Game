@@ -8,7 +8,16 @@ import {
   TableCell,
   TableFooter,
 } from '@/components/ui/table';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
+import { createPortal } from 'react-dom';
+import { useViewportStage, useHandFit } from '@/hooks/use-table-layout';
+import { preloadDeck } from '@/lib/card-preload';
 import {
   Dialog,
   DialogContent,
@@ -16,8 +25,9 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
+import { RulesPages } from '@/components/game/rules-pages';
 import { RoundHands } from '@/components/game/round-hands';
-import { CardFace as Face, cardAsset } from '@/components/game/card-face';
+import { CardFace as Face } from '@/components/game/card-face';
 import { useCardFlight } from '@/hooks/use-card-flight';
 import { opponentTransition, visibleDiscard } from '@/lib/transition';
 import {
@@ -62,6 +72,10 @@ type View = {
 };
 type Seat = { code: string; token: string };
 export default function Home() {
+  useViewportStage();
+  useEffect(() => {
+    void preloadDeck();
+  }, []);
   const [name, setName] = useState('');
   const [expert, setExpert] = useState(false);
   const [maxScore, setMaxScore] = useState(101);
@@ -71,20 +85,6 @@ export default function Home() {
   const [seat, setSeat] = useState<Seat | null>(null);
   const [g, setG] = useState<View | null>(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    if (g?.underDiscard) {
-      const image = new Image();
-      image.src = cardAsset(g.underDiscard);
-    }
-  }, [g?.underDiscard?.id]);
-  useEffect(() => {
-    if (!g?.code) return;
-    for (let s = 0; s < 4; s++)
-      for (let r = 0; r <= 13; r++) {
-        const image = new Image();
-        image.src = cardAsset({ id: '', r, s });
-      }
-  }, [g?.code]);
   const [error, setError] = useState('');
   const [connection, setConnection] = useState(true);
   const [departingCard, setDepartingCard] = useState<string | null>(null);
@@ -100,10 +100,9 @@ export default function Home() {
   const handRound = useRef('');
   const [rules, setRules] = useState(false);
   const [scores, setScores] = useState(false);
-  useEffect(() => {
-    if (g?.status === 'ended') setScores(true);
-    else setScores(false);
-  }, [g?.code, g?.round, g?.status]);
+  const [scoreTab, setScoreTab] = useState(-1);
+  const [scorePage, setScorePage] = useState(0);
+  const [rulePage, setRulePage] = useState(0);
   const [confirm, setConfirm] = useState('');
   const inFlight = useRef(false);
   const requestEpoch = useRef(0);
@@ -118,7 +117,37 @@ export default function Home() {
   const opponentBefore = useRef<DOMRect[]>([]);
   const opponentAnimations = useRef<Animation[]>([]);
   function commit(next: View) {
-    motionRef.current?.capture();
+    const previous = gRef.current;
+    if (
+      !previous ||
+      previous.code !== next.code ||
+      previous.match !== next.match ||
+      previous.round !== next.round ||
+      previous.status !== next.status
+    ) {
+      setScores(next.status === 'ended');
+      setScoreTab(-1);
+      setScorePage(Math.max(0, Math.ceil(next.history.length / 5) - 1));
+    }
+    const key = `${next.code}/${next.match}/${next.round}`;
+    if (
+      handRound.current !== key ||
+      (gRef.current?.status === 'waiting' && next.status === 'playing')
+    ) {
+      motionRef.current?.reset();
+      handRound.current = key;
+      const hand = next.players[next.me]?.hand || [];
+      setOrder(
+        next.expert
+          ? [GROUP + 'expert', ...hand.map((c) => c.id)]
+          : [
+              GROUP + 'a',
+              ...hand.slice(0, 7).map((c) => c.id),
+              GROUP + 'b',
+              ...hand.slice(7).map((c) => c.id),
+            ],
+      );
+    } else motionRef.current?.capture();
     opponentBefore.current = Array.from(
       document.querySelectorAll<HTMLElement>('[data-opponent-card]'),
     ).map((el) => el.getBoundingClientRect());
@@ -131,6 +160,12 @@ export default function Home() {
     cardId?: string,
     animate?: () => Promise<void>,
   ) {
+    const epoch = requestEpoch.current;
+    const apply = () => {
+      if (epoch === requestEpoch.current) commit(next);
+    };
+    if (!gRef.current || gRef.current.code !== next.code) await preloadDeck();
+    if (epoch !== requestEpoch.current) return;
     const previous = gRef.current;
     if (
       previous?.code === next.code &&
@@ -140,7 +175,7 @@ export default function Home() {
       return;
     if (animate) {
       await animate();
-      commit(next);
+      apply();
       return;
     }
     const event = previous ? opponentTransition(previous, next) : null;
@@ -151,11 +186,11 @@ export default function Home() {
               event.open ? '[data-discard-card]' : '[data-draw-card]',
             )
           : document.querySelector<HTMLElement>(
-              '[data-opponent-card]:last-child',
+              `[data-opponent-slot="${(previous!.players[1 - previous!.me].count || 13) - 1}"]`,
             );
       const target = document.querySelector<HTMLElement>(
         event.kind === 'draw'
-          ? '[data-opponent-card]:last-child'
+          ? `[data-opponent-slot="${next.players[1 - next.me].count - 1}"]`
           : '[data-discard-card]',
       );
       if (source && target) {
@@ -165,31 +200,24 @@ export default function Home() {
             setLiftedDiscard(previous!.pile[0]?.id || null);
           await flightMotion.fly(
             source.getBoundingClientRect(),
-            event.kind === 'draw'
-              ? (() => {
-                  const r = target.getBoundingClientRect();
-                  const step =
-                    r.width +
-                    parseFloat(getComputedStyle(target).marginLeft || '0');
-                  return new DOMRect(
-                    r.left + step / 2,
-                    r.top,
-                    r.width,
-                    r.height,
-                  );
-                })()
-              : target.getBoundingClientRect(),
+            () => target.getBoundingClientRect(),
             event.card,
             event.label,
             () => {
-              if (event.kind === 'discard') setLandingDiscard(null);
-              else commit(next);
+              if (event.kind === 'discard') {
+                setLandingDiscard(null);
+                if (next.status !== 'playing') apply();
+              } else apply();
             },
-            event.kind === 'discard' ? source : null,
+            event.kind === 'discard' && next.status !== 'playing'
+              ? source
+              : null,
             event.kind === 'discard'
               ? () => {
-                  setLandingDiscard({ card: previous!.pile[0] || null });
-                  commit(next);
+                  if (next.status === 'playing') {
+                    setLandingDiscard({ card: previous!.pile[0] || null });
+                    apply();
+                  }
                 }
               : undefined,
           );
@@ -229,7 +257,7 @@ export default function Home() {
             card,
             'Discarding your card',
             () => {
-              if (next.status !== 'playing') commit(next);
+              if (next.status !== 'playing') apply();
               setLandingDiscard(null);
               setDepartingCard(null);
             },
@@ -237,7 +265,7 @@ export default function Home() {
             () => {
               if (next.status === 'playing') {
                 setLandingDiscard({ card: previous.pile[0] || null });
-                commit(next);
+                apply();
               } else setDepartingCard(card.id);
             },
           );
@@ -265,8 +293,9 @@ export default function Home() {
                 card,
                 'Drawing your card',
                 () => {
+                  if (epoch !== requestEpoch.current) return;
                   motionRef.current?.fill(card.id);
-                  commit(next);
+                  apply();
                 },
               );
             } finally {
@@ -284,7 +313,7 @@ export default function Home() {
       );
       if (drawn) motionRef.current?.reveal(drawn);
     }
-    commit(next);
+    apply();
   }
   useEffect(() => {
     try {
@@ -341,8 +370,9 @@ export default function Home() {
         error?: string;
       };
       if (!response.ok) throw Error(data.error || 'Could not reach the table.');
-      if (action === 'poll' && epoch !== requestEpoch.current) return false;
+      if (epoch !== requestEpoch.current) return false;
       await receive(data.game, action, cardId, animate);
+      if (epoch !== requestEpoch.current) return false;
       setConnection(true);
       if (action === 'create' || action === 'join' || action === 'practice') {
         const s = { code: data.game.code, token: data.token };
@@ -487,6 +517,17 @@ export default function Home() {
       return !!(await call('discard', id, seat, animate));
     },
     `${g?.code}/${g?.match}/${g?.round}/${g?.status}`,
+    (id) => {
+      const latest = gRef.current;
+      if (
+        latest?.status === 'playing' &&
+        latest.turn === latest.me &&
+        latest.phase === 'discard' &&
+        latest.players[latest.me].hand.length === 14 &&
+        latest.picked !== id
+      )
+        void call('discard', id);
+    },
   );
   motionRef.current = motion;
   const drag = motion.drag;
@@ -515,6 +556,11 @@ export default function Home() {
           ),
       ),
   }));
+  const handFit = useHandFit(
+    motion.hand,
+    handGroups.map((group) => group.cards.length),
+    !!g?.expert,
+  );
   const groupInfo = handGroups.map((group) =>
     describeGroup(
       group.cards.filter((c) => c.id !== INCOMING),
@@ -622,41 +668,45 @@ export default function Home() {
       onPointerCancel={(e) => void motion.end(e, true)}
       onClickCapture={motion.click}
     >
-      {flightMotion.flight && (
-        <div
-          ref={flightMotion.element}
-          className={`playing-card flight-card ${flightMotion.flight.card?.s && flightMotion.flight.card.s % 2 ? 'red' : ''} ${!flightMotion.flight.card ? 'card-back' : ''}`}
-          style={{
-            left: flightMotion.flight.from.left,
-            top: flightMotion.flight.from.top,
-            width: flightMotion.flight.width,
-            height: flightMotion.flight.height,
-            transform: `scale(${flightMotion.flight.from.width / flightMotion.flight.width},${flightMotion.flight.from.height / flightMotion.flight.height})`,
-          }}
-          aria-hidden="true"
-        >
-          {flightMotion.flight.card ? (
-            <Face c={flightMotion.flight.card} />
-          ) : (
-            <b>✦</b>
-          )}
-        </div>
-      )}
-      {drag && (
-        <div
-          ref={motion.ghost}
-          className={`playing-card drag-ghost ${drag.face?.s && drag.face.s % 2 ? 'red' : ''} ${drag.source === 'draw' && !drag.face ? 'card-back deck' : ''}`}
-          style={{
-            left: drag.origin.left,
-            top: drag.origin.top,
-            width: drag.origin.width,
-            height: drag.origin.height,
-          }}
-          aria-hidden="true"
-        >
-          {drag.face ? <Face c={drag.face} w={g?.wild.r} /> : <b>♠</b>}
-        </div>
-      )}
+      {flightMotion.flight &&
+        createPortal(
+          <div
+            ref={flightMotion.element}
+            className={`playing-card flight-card ${flightMotion.flight.card?.s && flightMotion.flight.card.s % 2 ? 'red' : ''} ${!flightMotion.flight.card ? 'card-back' : ''}`}
+            style={{
+              left: flightMotion.flight.from.left,
+              top: flightMotion.flight.from.top,
+              width: flightMotion.flight.width,
+              height: flightMotion.flight.height,
+              transform: `scale(${flightMotion.flight.from.width / flightMotion.flight.width},${flightMotion.flight.from.height / flightMotion.flight.height})`,
+            }}
+            aria-hidden="true"
+          >
+            {flightMotion.flight.card ? (
+              <Face c={flightMotion.flight.card} />
+            ) : (
+              <b>✦</b>
+            )}
+          </div>,
+          document.body,
+        )}
+      {drag &&
+        createPortal(
+          <div
+            ref={motion.ghost}
+            className={`playing-card drag-ghost ${drag.face?.s && drag.face.s % 2 ? 'red' : ''} ${drag.source === 'draw' && !drag.face ? 'card-back deck' : ''}`}
+            style={{
+              left: drag.origin.left,
+              top: drag.origin.top,
+              width: drag.origin.width,
+              height: drag.origin.height,
+            }}
+            aria-hidden="true"
+          >
+            {drag.face ? <Face c={drag.face} w={g?.wild.r} /> : <b>♠</b>}
+          </div>,
+          document.body,
+        )}
       <header>
         <div className="brand">
           <span className="brand-icon">♠</span>
@@ -878,8 +928,19 @@ export default function Home() {
                     className="opponent-cards"
                     aria-label={`${other?.count} hidden cards`}
                   >
-                    {Array.from({ length: other?.count || 13 }, (_, i) => (
-                      <div data-opponent-card className="card-back" key={i}>
+                    {Array.from({ length: 14 }, (_, i) => (
+                      <div
+                        data-opponent-card={
+                          i < (other?.count || 13) ? true : undefined
+                        }
+                        data-opponent-slot={i}
+                        style={{
+                          visibility:
+                            i < (other?.count || 13) ? 'visible' : 'hidden',
+                        }}
+                        className="card-back"
+                        key={i}
+                      >
                         ✦
                       </div>
                     ))}
@@ -976,21 +1037,6 @@ export default function Home() {
                           onClick={() => {
                             const id = GROUP + String(++groupCounter.current);
                             motion.sort([...order, id]);
-                            requestAnimationFrame(() =>
-                              requestAnimationFrame(() => {
-                                Array.from(
-                                  motion.hand.current?.querySelectorAll<HTMLElement>(
-                                    '[data-hand-group]',
-                                  ) || [],
-                                )
-                                  .find((el) => el.dataset.handGroup === id)
-                                  ?.scrollIntoView({
-                                    behavior: 'smooth',
-                                    block: 'nearest',
-                                    inline: 'nearest',
-                                  });
-                              }),
-                            );
                           }}
                         >
                           + Group
@@ -1012,6 +1058,12 @@ export default function Home() {
                   <div
                     ref={motion.hand}
                     className={`hand ${drag && drag.source !== 'hand' ? 'hand-receiving' : ''}`}
+                    style={
+                      {
+                        '--hand-card-width': `${handFit.card}px`,
+                        '--hand-card-step': `${handFit.step}px`,
+                      } as CSSProperties
+                    }
                     aria-label="Your hand"
                   >
                     {handGroups.map((group, index) => {
@@ -1020,11 +1072,20 @@ export default function Home() {
                         <section
                           key={group.id}
                           data-hand-group={group.id}
+                          style={{
+                            width: Math.max(
+                              g.expert ? 0 : 64,
+                              handFit.card +
+                                Math.max(0, group.cards.length - 1) *
+                                  handFit.step +
+                                (g.expert ? 0 : 14),
+                            ),
+                          }}
                           className={`hand-group ${g.expert ? '' : `group-${info.kind}`} ${group.cards.length > 7 ? 'group-scroll' : ''}`}
                         >
                           {!g.expert && (
                             <div className="group-label">
-                              <span>
+                              <span title={info.label}>
                                 {info.valid ? '✓ ' : ''}
                                 {info.label}
                               </span>
@@ -1180,9 +1241,7 @@ export default function Home() {
           )}
         </span>
         <span>
-          {g
-            ? 'Drag to discard · Jokers may be dropped'
-            : 'PLAY FOR POINTS · NO STAKES'}
+          {g ? 'Drag or double-tap to discard' : 'PLAY FOR POINTS · NO STAKES'}
         </span>
         {g && (
           <button className="quiet" onClick={() => setConfirm('leave')}>
@@ -1191,79 +1250,12 @@ export default function Home() {
         )}
       </footer>
       <Dialog open={rules} onOpenChange={setRules}>
-        <DialogContent className="modal">
+        <DialogContent className="modal rules-modal">
           <DialogTitle>Thirteen cards. One winning hand.</DialogTitle>
           <DialogDescription>
             Two-player Indian points rummy · House rules
           </DialogDescription>
-          <p className="art-credit">
-            Card artwork:{' '}
-            <a
-              href="https://github.com/letele/playing-cards"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Letele / Adrian Kennard’s playing cards
-            </a>{' '}
-            · CC0.
-          </p>
-          <ol>
-            <li>
-              Draw from the closed deck or the top discard, then discard one
-              card.
-            </li>
-            <li>
-              Arrange all 13 cards into sets and sequences of at least 3 cards.
-              You need two sequences, including one pure sequence.
-            </li>
-            <li>
-              A pure sequence uses consecutive cards of one suit. Aces can be
-              low or high, never wrap around.
-            </li>
-            <li>
-              Sets contain 3–4 equal ranks in different suits. Printed jokers
-              and the wild rank can replace cards. A wild card used naturally
-              can be in a pure sequence or a natural set.
-            </li>
-            <li>
-              With 14 cards on your turn, press Declare. We automatically choose
-              a legal spare card and check every possible arrangement
-              automatically.
-            </li>
-          </ol>
-          <p>
-            Winner: 0 points. Loser: unmatched card values, capped at 80. A, J,
-            Q, K = 10; jokers = 0. Without a pure sequence, all cards count.
-            Without two sequences, only pure sequences are exempt.
-          </p>
-          <p>
-            First drop: 20 · Later drop: 40 · Invalid declaration: 80. Lower
-            total wins. The match ends when either total reaches the chosen
-            score limit. Two decks plus two printed jokers.
-          </p>
-          <p>
-            A hand made entirely of natural sets or entirely of natural
-            sequences wins double points: the opponent’s normal penalty is
-            doubled after the 80-point cap (up to 160). All-natural sets are a
-            special win without the usual sequence requirement. Wild-rank cards
-            may count as their own rank and suit; printed jokers must first be
-            dropped to gain a fixed value.
-          </p>
-          <p>
-            To drop any joker, drag it to the discard pile as your normal
-            discard. It permanently loses wild status for this round. A
-            wild-rank card keeps its face; a printed joker becomes the exact
-            rank and suit of the displayed wild indicator. Either player can
-            pick it up on a later turn. A card just picked up cannot be returned
-            immediately.
-          </p>
-          <a
-            href="https://www.rummycircle.com/how-to-play-rummy/cards-in-Rummy.pdf"
-            target="_blank"
-            rel="noreferrer"
-          >
-            See sequence and set examples ↗
-          </a>
+          <RulesPages page={rulePage} setPage={setRulePage} />
         </DialogContent>
       </Dialog>
       <Dialog open={scores} onOpenChange={setScores}>
@@ -1300,50 +1292,94 @@ export default function Home() {
                   </div>
                 </div>
               )}
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Round</TableHead>
-                    {g.players.map((p, i) => (
-                      <TableHead key={i}>{p.name}</TableHead>
-                    ))}
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {g.history.length ? (
-                    g.history.map((h) => (
-                      <TableRow key={h.round}>
-                        <TableCell>
-                          {h.round}
-                          {h.multiplier === 2 && (
-                            <small className="bonus-tag">
-                              2× natural {h.bonus}
-                            </small>
-                          )}
-                        </TableCell>
-                        {h.points.map((p, i) => (
-                          <TableCell key={i}>+{p}</TableCell>
-                        ))}
-                      </TableRow>
-                    ))
-                  ) : (
+              <nav className="panel-tabs" aria-label="Scoreboard views">
+                <button
+                  className={scoreTab === -1 ? 'chosen' : ''}
+                  onClick={() => setScoreTab(-1)}
+                >
+                  Scores
+                </button>
+                {g.status === 'ended' &&
+                  g.players.map((p, i) => (
+                    <button
+                      key={i}
+                      className={scoreTab === i ? 'chosen' : ''}
+                      onClick={() => setScoreTab(i)}
+                    >
+                      {p.name}’s hand
+                    </button>
+                  ))}
+              </nav>
+              <div className="score-panel" hidden={scoreTab !== -1}>
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell colSpan={3}>
-                        No completed rounds yet.
-                      </TableCell>
+                      <TableHead>Round</TableHead>
+                      {g.players.map((p, i) => (
+                        <TableHead key={i}>{p.name}</TableHead>
+                      ))}
                     </TableRow>
-                  )}
-                </TableBody>
-                <TableFooter>
-                  <TableRow>
-                    <TableCell>Total</TableCell>
-                    {g.players.map((p, i) => (
-                      <TableCell key={i}>{p.score}</TableCell>
-                    ))}
-                  </TableRow>
-                </TableFooter>
-              </Table>
-              {g.status === 'ended' && <RoundHands game={g} />}
+                  </TableHeader>
+                  <TableBody>
+                    {g.history.length ? (
+                      g.history
+                        .slice(scorePage * 5, scorePage * 5 + 5)
+                        .map((h) => (
+                          <TableRow key={h.round}>
+                            <TableCell>
+                              {h.round}
+                              {h.multiplier === 2 && (
+                                <small className="bonus-tag">
+                                  2× natural {h.bonus}
+                                </small>
+                              )}
+                            </TableCell>
+                            {h.points.map((p, i) => (
+                              <TableCell key={i}>+{p}</TableCell>
+                            ))}
+                          </TableRow>
+                        ))
+                    ) : (
+                      <TableRow>
+                        <TableCell colSpan={3}>
+                          No completed rounds yet.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                  <TableFooter>
+                    <TableRow>
+                      <TableCell>Total</TableCell>
+                      {g.players.map((p, i) => (
+                        <TableCell key={i}>{p.score}</TableCell>
+                      ))}
+                    </TableRow>
+                  </TableFooter>
+                </Table>
+                <nav className="page-controls" aria-label="Score history pages">
+                  <button
+                    disabled={scorePage === 0}
+                    onClick={() => setScorePage((p) => p - 1)}
+                  >
+                    ← Previous
+                  </button>
+                  <span>
+                    {scorePage + 1} /{' '}
+                    {Math.max(1, Math.ceil(g.history.length / 5))}
+                  </span>
+                  <button
+                    disabled={(scorePage + 1) * 5 >= g.history.length}
+                    onClick={() => setScorePage((p) => p + 1)}
+                  >
+                    Next →
+                  </button>
+                </nav>
+              </div>
+              {g.status === 'ended' && (
+                <div className="score-panel" hidden={scoreTab === -1}>
+                  <RoundHands game={g} playerIndex={Math.max(0, scoreTab)} />
+                </div>
+              )}
               {g.status === 'ended' && !g.matchOver && (
                 <button
                   className="score-next"

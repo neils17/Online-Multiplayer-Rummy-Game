@@ -21,7 +21,7 @@ export function CardFace({ c, w }: { c: Card; w?: number }) {
           title="Dropped joker: face value only"
           aria-label="Face value only"
         >
-          FIXED
+          Was Joker
         </span>
       )}
       {w !== undefined && isWild(c, w) && (

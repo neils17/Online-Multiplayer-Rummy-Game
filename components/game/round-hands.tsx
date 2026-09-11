@@ -12,7 +12,13 @@ type ResultGame = {
   players: { name: string; hand: Card[]; score: number; draws: number }[];
   history: RoundResult[];
 };
-export function RoundHands({ game }: { game: ResultGame }) {
+export function RoundHands({
+  game,
+  playerIndex = 0,
+}: {
+  game: ResultGame;
+  playerIndex?: number;
+}) {
   const [grouped, setGrouped] = useState<string[][][] | null>(null);
   const [failed, setFailed] = useState(false);
   const fingerprint = JSON.stringify([
@@ -62,7 +68,7 @@ export function RoundHands({ game }: { game: ResultGame }) {
           <strong>{game.message}</strong>
           <p>
             Both hands revealed · Wild cards marked W · Dropped jokers marked
-            FIXED
+            Was Joker
           </p>
           {round?.multiplier === 2 && (
             <p className="bonus-calculation">
@@ -85,6 +91,7 @@ export function RoundHands({ game }: { game: ResultGame }) {
         </p>
       )}
       {game.players.map((p, i) => {
+        if (i !== playerIndex) return null;
         const groups = grouped?.[i]?.map((ids) =>
           ids.map((id) => p.hand.find((c) => c.id === id)!),
         ) || [p.hand];

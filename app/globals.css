@@ -3517,4 +3517,711 @@ small,
 }
 
 /* Preserve the complete supplied Joker illustration, including both stars. */
-.playing-card .deck-face.joker-art { object-fit: contain; background: #e9ddbd; }
+.playing-card .deck-face.joker-art {
+  object-fit: contain;
+  background: #e9ddbd;
+}
+
+/* One fitted stage for every view. The stage never derives its size from cards. */
+:root {
+  --ui-scale: 1;
+  --stage-width: 100vw;
+  --stage-height: 100dvh;
+  --viewport-left: 0px;
+  --viewport-top: 0px;
+}
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+body {
+  position: fixed;
+  inset: 0;
+}
+* {
+  scrollbar-width: none;
+}
+*::-webkit-scrollbar {
+  display: none;
+}
+.shell.casino,
+.shell.casino.game-shell {
+  position: fixed;
+  left: var(--viewport-left);
+  top: var(--viewport-top);
+  margin: 0;
+  width: var(--stage-width);
+  height: var(--stage-height);
+  min-height: 0;
+  max-width: none;
+  transform: scale(var(--ui-scale));
+  transform-origin: top left;
+  display: grid;
+  grid-template-rows: 42px minmax(0, 1fr) 26px;
+  gap: 8px;
+  padding: max(10px, env(safe-area-inset-top))
+    max(12px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom))
+    max(12px, env(safe-area-inset-left));
+  overflow: hidden;
+}
+.shell.casino > header {
+  height: 42px;
+  min-height: 0;
+  margin: 0;
+  padding: 0 10px;
+}
+.shell.casino > header .brand {
+  font-size: 28px;
+}
+.shell.casino > footer {
+  height: 26px;
+  min-height: 0;
+  padding: 0 8px;
+  margin: 0;
+  font-size: 10px;
+  gap: 8px;
+  border: 0;
+}
+.shell.casino > footer button {
+  font-size: 11px;
+  padding: 2px 8px;
+}
+.shell.casino .table {
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+  margin: 0;
+  border-radius: 26px;
+}
+.shell.casino .table-line {
+  display: none;
+}
+.shell.casino .table:not(.in-game) {
+  display: flex;
+  align-items: center;
+  padding: 24px 44px;
+}
+.shell.casino .welcome {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  width: 430px;
+  max-width: 100%;
+  z-index: 2;
+}
+.shell.casino .welcome h1 {
+  font-size: 48px;
+  line-height: 1.04;
+  margin: 12px 0;
+}
+.shell.casino .welcome > p {
+  font-size: 14px;
+  margin: 10px 0;
+}
+.shell.casino .welcome form {
+  margin: 10px 0;
+  width: 100%;
+  display: flex;
+  gap: 8px;
+}
+.shell.casino .welcome form input {
+  min-width: 0;
+  flex: 1;
+  width: 0;
+}
+.shell.casino .welcome input,
+.shell.casino .welcome button {
+  font-size: 14px;
+  min-height: 40px;
+  padding: 10px 14px;
+}
+.shell.casino .game-settings {
+  margin: 12px 0;
+  padding: 12px;
+}
+.shell.casino .game-settings .score-setting {
+  margin-top: 10px;
+}
+.shell.casino .game-settings input[type='number'] {
+  width: 76px;
+}
+.shell.casino .game-settings .score-slider {
+  min-height: 20px;
+  margin: 4px 0;
+}
+.shell.casino .practice-option {
+  margin-top: 14px;
+  padding-top: 10px;
+}
+.shell.casino .practice-option button {
+  margin: 8px 0;
+}
+.shell.casino .casino-emblem {
+  right: 8%;
+  left: auto;
+  top: 20%;
+}
+.shell.casino .sample {
+  left: auto;
+  right: 8%;
+  bottom: 14%;
+}
+.shell.casino.game-shell .table.in-game {
+  --pile-card-width: 96px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 28px 58px 38px minmax(152px, 1fr) minmax(250px, 44%);
+  gap: 6px;
+  padding: 10px 14px;
+}
+.shell.casino.game-shell .table-top {
+  grid-column: 1;
+  grid-row: 1;
+  min-height: 0;
+  padding: 0;
+}
+.shell.casino.game-shell .table-top button,
+.shell.casino .practice-label {
+  font-size: 12px;
+  padding: 3px 8px;
+}
+.shell.casino.game-shell .opponent-seat {
+  grid-column: 1;
+  grid-row: 2;
+  gap: 18px;
+  min-height: 0;
+}
+.shell.casino.game-shell .opponent {
+  max-width: 280px;
+  height: 48px;
+  padding: 3px 10px;
+}
+.shell.casino.game-shell .opponent .avatar {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  flex-basis: 30px;
+}
+.shell.casino.game-shell .opponent-cards {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  width: 308px;
+  height: 50.4px;
+  flex: 0 0 308px;
+  margin: 0;
+}
+.shell.casino.game-shell .opponent-cards .card-back {
+  width: 35px;
+  height: 49px;
+  flex: 0 0 35px;
+  margin-left: -14px;
+  transform: none;
+  animation: none;
+}
+.shell.casino.game-shell .opponent-cards .card-back:first-child {
+  margin-left: 0;
+}
+.shell.casino.game-shell .center-label {
+  grid-column: 1;
+  grid-row: 3;
+  margin: 0;
+  align-self: center;
+}
+.shell.casino.game-shell .center-label > .eyebrow {
+  display: block;
+  font-size: 9px;
+  line-height: 12px;
+}
+.shell.casino.game-shell .center-label h2 {
+  margin: 2px 0 0;
+  font-size: 23px;
+  line-height: 26px;
+}
+.shell.casino.game-shell .piles {
+  grid-column: 1;
+  grid-row: 4;
+  gap: 50px;
+  align-self: center;
+  margin: 0;
+  padding: 0;
+}
+.shell.casino.game-shell .pile-item {
+  gap: 6px;
+}
+.shell.casino.game-shell .pile-item .playing-card,
+.shell.casino.game-shell .deck {
+  width: var(--pile-card-width);
+  height: calc(var(--pile-card-width) * 1.4);
+}
+.shell.casino.game-shell .pile-item > span {
+  font-size: 11px;
+}
+.shell.casino.game-shell .hand-area {
+  grid-column: 1;
+  grid-row: 5;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: 32px minmax(0, 1fr) 20px 0px 40px;
+  gap: 2px;
+  padding: 4px;
+  border: 0;
+  border-top: 1px solid #a58b5030;
+  overflow: hidden;
+}
+.shell.casino.game-shell.expert-mode .hand-area {
+  grid-template-rows: 32px minmax(0, 1fr) 0px 0px 40px;
+}
+.shell.casino.game-shell .hand-heading {
+  min-width: 0;
+  padding: 0 6px;
+  gap: 8px;
+}
+.shell.casino.game-shell .hand-heading strong {
+  font-size: 15px;
+}
+.shell.casino.game-shell .hand-tools {
+  gap: 6px;
+}
+.shell.casino.game-shell .hand-tools button {
+  font-size: 12px;
+  padding: 6px 10px;
+}
+.shell.casino.game-shell .hand {
+  display: flex;
+  flex-flow: row wrap;
+  align-items: center;
+  align-content: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  gap: 8px;
+  padding: 4px;
+  overflow: hidden;
+  touch-action: none;
+}
+.shell.casino.game-shell .hand-group {
+  flex: 0 0 auto;
+  min-width: 82px;
+  max-width: 100%;
+  padding: 4px 6px;
+  margin: 0;
+  overflow: visible;
+}
+.shell.casino.game-shell .group-label {
+  display: flex;
+  min-height: 22px;
+  height: 22px;
+  margin: 0 0 6px;
+  gap: 2px;
+  font-size: 9px;
+  line-height: 11px;
+}
+.shell.casino.game-shell .group-label > span {
+  white-space: normal;
+  min-width: 0;
+  max-width: 105px;
+}
+.shell.casino.game-shell .group-label-tools {
+  gap: 3px;
+}
+.shell.casino.game-shell .group-label-tools small {
+  font-size: 9px;
+}
+.shell.casino.game-shell .group-label-tools button {
+  width: 16px;
+  height: 20px;
+  padding: 0;
+}
+.shell.casino.game-shell .group-cards {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-start;
+  position: relative;
+  min-height: 0;
+  height: calc(var(--hand-card-width) * 1.4 + 4px);
+  padding: 0 0 4px;
+  overflow: visible;
+}
+.shell.casino.game-shell .group-cards .hand-card {
+  width: var(--hand-card-width);
+  height: calc(var(--hand-card-width) * 1.4);
+  flex: 0 0 var(--hand-card-width);
+  margin: 0 0 0 calc(var(--hand-card-step) - var(--hand-card-width));
+  max-width: none;
+  animation: none;
+  transition: box-shadow 180ms ease;
+  transform: none;
+  touch-action: none;
+}
+.shell.casino.game-shell .group-cards .hand-card:first-child {
+  margin-left: 0;
+}
+.shell.casino.game-shell .empty-group {
+  width: 70px;
+  min-width: 0;
+  height: 100%;
+  font-size: 10px;
+  padding: 6px;
+}
+.shell.casino.game-shell .group-progress {
+  font-size: 10px;
+  margin: 0;
+  gap: 14px;
+}
+.shell.casino.game-shell .actions {
+  min-height: 0;
+  padding: 0 6px;
+  border: 0;
+}
+.shell.casino.game-shell .actions button {
+  font-size: 13px;
+  padding: 8px 14px;
+  min-height: 34px;
+}
+.shell.casino.game-shell .waiting {
+  grid-column: 1;
+  grid-row: 2 / -1;
+}
+.shell.casino.game-shell .result {
+  bottom: 48px;
+  max-width: 90%;
+}
+.shell.casino.game-shell .notice {
+  max-width: 90%;
+  bottom: 72px;
+}
+/* The animation layers use viewport coordinates, outside the scaled stage. */
+.drag-ghost,
+.flight-card {
+  position: fixed;
+  pointer-events: none;
+  z-index: 100;
+  transform-origin: top left;
+  animation: none !important;
+  transition: none !important;
+  will-change: transform;
+}
+.playing-card .fixed-marker {
+  font-size: clamp(5px, 0.09em, 8px);
+  white-space: nowrap;
+}
+:root[data-layout='portrait'] .shell.casino > header > .eyebrow {
+  display: none;
+}
+:root[data-layout='portrait'] .shell.casino .table:not(.in-game) {
+  justify-content: center;
+  padding: 20px;
+}
+:root[data-layout='portrait'] .shell.casino .casino-emblem,
+:root[data-layout='portrait'] .shell.casino .sample {
+  display: none;
+}
+:root[data-layout='portrait'] .shell.casino .welcome h1 {
+  font-size: 45px;
+}
+:root[data-layout='portrait'] .shell.casino.game-shell .table.in-game {
+  grid-template-rows: 28px 100px 42px minmax(160px, 1fr) minmax(350px, 48%);
+  padding: 10px 6px;
+}
+:root[data-layout='portrait'] .shell.casino.game-shell .opponent-seat {
+  flex-direction: column;
+  gap: 4px;
+}
+:root[data-layout='portrait'] .shell.casino.game-shell .piles {
+  gap: 30px;
+}
+:root[data-layout='portrait'] .shell.casino.game-shell .opponent {
+  width: 270px;
+}
+:root[data-layout='portrait'] .shell.casino > footer > span:nth-child(2) {
+  display: none;
+}
+/* Pages, not scrolling regions: all history and both hands remain reachable. */
+.modal[data-slot='dialog-content'],
+.modal.wide[data-slot='dialog-content'] {
+  width: min(940px, calc(var(--stage-width) - 32px));
+  max-width: none !important;
+  max-height: calc(var(--stage-height) - 32px);
+  overflow: hidden !important;
+  scale: var(--ui-scale);
+  transform-origin: center;
+  animation: none !important;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 22px !important;
+  color: #e7dab9;
+  background: #112a20;
+  border: 1px solid #a48b56;
+  border-radius: 18px;
+}
+.modal.rules-modal,
+.modal.score-modal {
+  height: calc(var(--stage-height) - 32px);
+}
+.modal [data-slot='dialog-title'] {
+  font:
+    600 27px/1.15 Georgia,
+    serif;
+  color: #f2dfad;
+  padding-right: 22px;
+}
+.modal [data-slot='dialog-description'] {
+  color: #b8c9b5;
+  font-size: 12px;
+  margin: 0;
+}
+.modal button {
+  touch-action: manipulation;
+}
+.panel-tabs,
+.page-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+.panel-tabs button,
+.page-controls button {
+  background: #1c392b;
+  color: #dcc99c;
+  border: 1px solid #806e44;
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-size: 12px;
+  min-width: 0;
+}
+.panel-tabs button {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.panel-tabs button.chosen {
+  background: #d8bd7b;
+  color: #183025;
+}
+.page-controls {
+  margin-top: 12px;
+  font-size: 12px;
+}
+.page-controls button:disabled {
+  opacity: 0.35;
+}
+.rules-page {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  font-size: 15px;
+  line-height: 1.55;
+}
+.rules-page h3 {
+  font:
+    600 21px Georgia,
+    serif;
+  color: #e9c980;
+  margin: 16px 0 8px;
+}
+.rules-page p {
+  margin: 8px 0;
+}
+.rules-modal .art-credit {
+  font-size: 11px;
+  margin: 0;
+}
+.score-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.score-panel[hidden] {
+  display: none;
+}
+.score-panel [data-slot='table-container'] {
+  overflow: hidden;
+}
+.score-modal table {
+  table-layout: fixed;
+  width: 100%;
+  font-size: 14px;
+}
+.score-modal th,
+.score-modal td {
+  height: 40px;
+  padding: 8px 12px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.score-modal .match-winner {
+  padding: 10px 14px;
+  flex: 0 0 auto;
+}
+.score-modal .match-winner > span {
+  font-size: 10px;
+  letter-spacing: 2px;
+}
+.score-modal .match-winner h2 {
+  font-size: 23px;
+  margin: 4px 0;
+}
+.score-modal .match-winner p {
+  display: none;
+}
+.score-modal .match-winner > div {
+  margin-top: 8px;
+  gap: 10px;
+}
+.score-modal .match-winner button,
+.score-modal .score-next {
+  padding: 8px 14px;
+  font-size: 13px;
+  position: static;
+  min-height: 34px;
+}
+.score-modal .round-review {
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.score-modal .round-verdict {
+  padding: 8px;
+  margin: 0;
+  font-size: 12px;
+}
+.score-modal .round-verdict p {
+  font-size: 10px;
+  margin: 4px 0 0;
+}
+.score-modal .review-note {
+  font-size: 10px;
+  margin: 0;
+}
+.score-modal .review-player {
+  padding: 10px;
+  margin: 0;
+}
+.score-modal .review-player-heading {
+  margin: 0 0 6px;
+}
+.score-modal .review-player-heading h3 {
+  font-size: 20px;
+  margin: 0;
+}
+.score-modal .review-player-heading span {
+  font-size: 10px;
+}
+.score-modal .review-score strong {
+  font-size: 22px;
+}
+.score-modal .review-requirements {
+  padding: 4px 0;
+  margin: 0 0 6px;
+  gap: 10px;
+  font-size: 10px;
+}
+.score-modal .review-groups {
+  display: flex;
+  flex-flow: row wrap;
+  gap: 8px;
+  overflow: hidden;
+}
+.score-modal .review-group {
+  padding: 6px;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+.score-modal .review-group-label {
+  font-size: 10px;
+  margin: 0 0 5px;
+  gap: 12px;
+}
+.score-modal .review-group-label span {
+  font-size: 9px;
+}
+.score-modal .review-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  overflow: hidden;
+}
+.score-modal .review-cards .playing-card {
+  width: 56px;
+  height: 78.4px;
+  flex: 0 0 56px;
+  margin: 0;
+}
+.score-modal .review-group > small {
+  display: block;
+  font-size: 9px;
+  margin-top: 4px;
+}
+:root[data-layout='portrait'] .rules-page {
+  font-size: 14px;
+}
+:root[data-layout='portrait'] .modal.score-modal {
+  padding: 16px !important;
+  gap: 10px;
+}
+:root[data-layout='portrait'] .score-modal .review-cards .playing-card {
+  width: 46px;
+  height: 64.4px;
+  flex-basis: 46px;
+}
+.shell.casino.game-shell.expert-mode .hand-group {
+  padding: 0;
+  min-width: 0;
+  border: 0;
+}
+.shell.casino.game-shell .group-cards {
+  gap: 0;
+}
+.playing-card .fixed-marker {
+  font: 700 7px/1 sans-serif;
+}
+.shell.casino.game-shell .hand-card .fixed-marker {
+  font-size: calc(var(--hand-card-width) * 0.067);
+}
+.shell.casino.game-shell .table.in-game {
+  grid-template-rows: 26px 50px 32px minmax(144px, 1fr) minmax(230px, 1.2fr);
+  gap: 4px;
+}
+.shell.casino.game-shell .hand-group {
+  min-width: 64px;
+}
+.shell.casino.game-shell .group-label > span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+:root[data-layout='portrait'] .shell.casino.game-shell .table.in-game {
+  grid-template-rows: 28px 90px 40px minmax(150px, 1fr) minmax(320px, 1.7fr);
+}
+:root[data-layout='portrait'] .rules-page {
+  font-size: 14px;
+  line-height: 1.4;
+}
+:root[data-layout='portrait'] .rules-page h3 {
+  font-size: 19px;
+  margin: 12px 0 4px;
+}
+.shell.casino.game-shell .group-cards .hand-card {
+  transform-origin: top left;
+}
+/* Safe-area insets are already excluded by the viewport fitter. */
+.shell.casino,
+.shell.casino.game-shell {
+  padding: 10px 12px 6px;
+}

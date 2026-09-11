@@ -1,4 +1,4 @@
-import { isWild, meld, value, type Card } from './game';
+import { isWild, meld, value, naturalCompletion, type Card } from './game';
 export const GROUP = '~group:';
 export const isGroup = (id: string) => id.startsWith(GROUP);
 export function splitGroups(order: string[]) {
@@ -128,6 +128,14 @@ export function arrangeHand(
 ) {
   if (!hand.length) return [] as Card[][];
   if (hand.length > 14) throw Error('Arrange supports up to 14 cards.');
+  const natural = naturalCompletion(hand, picked);
+  if (natural)
+    return [
+      ...natural.groups.map((cards) =>
+        ordered(cards, natural.kind === 'sets' ? 0 : 2, wild),
+      ),
+      ...(natural.discard ? [[natural.discard]] : []),
+    ];
   const n = hand.length,
     full = (1 << n) - 1;
   const byBit: { mask: number; type: number; reward: number }[][] = Array.from(

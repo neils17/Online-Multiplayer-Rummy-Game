@@ -15,6 +15,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
 import { RoundHands } from '@/components/game/round-hands';
 import { CardFace as Face, cardAsset } from '@/components/game/card-face';
 import { useCardFlight } from '@/hooks/use-card-flight';
@@ -29,8 +30,13 @@ import {
 } from '@/lib/arrange';
 import ArrangeWorker from '@/lib/arrange.worker?worker';
 import { useCardMotion, INCOMING } from '@/hooks/use-card-motion';
-import { type Card, rank, suit, isWild } from '@/lib/game';
+import { type Card, type RoundResult, rank, suit } from '@/lib/game';
 type View = {
+  expert: boolean;
+  maxScore: number;
+  match: number;
+  matchOver?: boolean;
+  winner?: number | null;
   revision?: number;
   picked?: string | null;
   code: string;
@@ -52,11 +58,15 @@ type View = {
   underDiscard?: Card | null;
   remaining: number;
   message: string;
-  history: { round: number; points: number[]; message: string }[];
+  history: RoundResult[];
 };
 type Seat = { code: string; token: string };
 export default function Home() {
   const [name, setName] = useState('');
+  const [expert, setExpert] = useState(false);
+  const [maxScore, setMaxScore] = useState(101);
+  const validOptions =
+    Number.isInteger(maxScore) && maxScore >= 101 && maxScore <= 151;
   const [code, setCode] = useState('');
   const [seat, setSeat] = useState<Seat | null>(null);
   const [g, setG] = useState<View | null>(null);
@@ -77,7 +87,6 @@ export default function Home() {
   }, [g?.code]);
   const [error, setError] = useState('');
   const [connection, setConnection] = useState(true);
-  const [selected, setSelected] = useState<string | null>(null);
   const [departingCard, setDepartingCard] = useState<string | null>(null);
   const [landingDiscard, setLandingDiscard] = useState<{
     card: Card | null;
@@ -279,9 +288,18 @@ export default function Home() {
   }
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('mehfil-seat');
+      const saved =
+        localStorage.getItem('rummy-seat') ||
+        localStorage.getItem('mehfil-seat');
+      if (saved) localStorage.setItem('rummy-seat', saved);
+      localStorage.removeItem('mehfil-seat');
       if (saved) setSeat(JSON.parse(saved));
-      setName(localStorage.getItem('mehfil-name') || '');
+      setName(
+        localStorage.getItem('rummy-name') ||
+          localStorage.getItem('mehfil-name') ||
+          '',
+      );
+      localStorage.removeItem('mehfil-name');
       setCode(new URLSearchParams(location.search).get('room') || '');
     } catch {}
   }, []);
@@ -291,6 +309,11 @@ export default function Home() {
     current = seat,
     animate?: () => Promise<void>,
   ) {
+    if (
+      !gRef.current &&
+      !['create', 'join', 'practice', 'poll'].includes(action)
+    )
+      return false;
     if (action !== 'poll') {
       requestEpoch.current++;
       inFlight.current = true;
@@ -305,6 +328,8 @@ export default function Home() {
         body: JSON.stringify({
           action,
           cardId,
+          expert,
+          maxScore,
           name,
           code: current?.code || code,
           token: current?.token,
@@ -322,10 +347,9 @@ export default function Home() {
       if (action === 'create' || action === 'join' || action === 'practice') {
         const s = { code: data.game.code, token: data.token };
         setSeat(s);
-        localStorage.setItem('mehfil-seat', JSON.stringify(s));
-        localStorage.setItem('mehfil-name', name);
+        localStorage.setItem('rummy-seat', JSON.stringify(s));
+        localStorage.setItem('rummy-name', name);
       }
-      if (action === 'discard' || action === 'declare') setSelected(null);
       return data.game;
     } catch (e) {
       if (action === 'poll') setConnection(false);
@@ -384,10 +408,11 @@ export default function Home() {
   const hand = g?.players[g.me]?.hand || [];
   const handKey = hand.map((c) => c.id).join(',');
   useLayoutEffect(() => {
-    const key = `${g?.code}/${g?.round}`;
+    const key = `${g?.code}/${g?.match}/${g?.round}`;
     setOrder((old) => {
       if (handRound.current !== key) {
         handRound.current = key;
+        if (g?.expert) return [GROUP + 'expert', ...hand.map((c) => c.id)];
         return [
           GROUP + 'a',
           ...hand.slice(0, 7).map((c) => c.id),
@@ -407,7 +432,7 @@ export default function Home() {
       );
       return next.join('|') === old.join('|') ? old : next;
     });
-  }, [handKey, g?.code, g?.round]);
+  }, [handKey, g?.code, g?.match, g?.round, g?.expert]);
   const mine = !!g && g.turn === g.me && g.status === 'playing';
   const mayDiscard = mine && g?.phase === 'discard';
   const other = g?.players[1 - g.me];
@@ -438,7 +463,6 @@ export default function Home() {
   const motion = useCardMotion(
     order,
     setOrder,
-    setSelected,
     async (source) => {
       const before = gRef.current?.players[gRef.current.me].hand || [];
       const result = await call(source);
@@ -462,7 +486,7 @@ export default function Home() {
       }
       return !!(await call('discard', id, seat, animate));
     },
-    `${g?.code}/${g?.round}/${g?.status}`,
+    `${g?.code}/${g?.match}/${g?.round}/${g?.status}`,
   );
   motionRef.current = motion;
   const drag = motion.drag;
@@ -507,13 +531,14 @@ export default function Home() {
   );
   const sequenceCount = groupInfo.filter((info) => info.sequence).length;
   async function arrange() {
-    if (!hand.length || arranging) return;
+    if (!hand.length || arranging || g?.expert) return;
     setArranging(true);
     try {
       if (!arrangeWorker.current) arrangeWorker.current = new ArrangeWorker();
       const worker = arrangeWorker.current;
       while (gRef.current) {
         const current = gRef.current;
+        if (current.expert) break;
         const currentHand = current.players[current.me].hand;
         const fingerprint = JSON.stringify([
           current.code,
@@ -559,7 +584,6 @@ export default function Home() {
             ...ids,
           ]),
         );
-        setSelected(null);
         break;
       }
     } catch (error) {
@@ -571,7 +595,9 @@ export default function Home() {
     }
   }
   function leave() {
-    localStorage.removeItem('mehfil-seat');
+    requestEpoch.current++;
+    setScores(false);
+    localStorage.removeItem('rummy-seat');
     setSeat(null);
     gRef.current = null;
     setG(null);
@@ -590,7 +616,7 @@ export default function Home() {
   }
   return (
     <main
-      className={`shell casino ${g ? 'game-shell' : ''}`}
+      className={`shell casino ${g ? 'game-shell' : ''} ${g?.expert ? 'expert-mode' : ''}`}
       onPointerMove={motion.move}
       onPointerUp={(e) => void motion.end(e)}
       onPointerCancel={(e) => void motion.end(e, true)}
@@ -634,9 +660,7 @@ export default function Home() {
       <header>
         <div className="brand">
           <span className="brand-icon">♠</span>
-          <span>
-            mehfil<span className="brand-dot">.</span>
-          </span>
+          <span>Rummy</span>
           <small>THE RUMMY CLUB</small>
         </div>
         <span className="eyebrow">INDIAN RUMMY · 13 CARDS</span>
@@ -658,6 +682,47 @@ export default function Home() {
                 <span>Play your hand.</span>
               </h1>
               <p>Thirteen cards. Two players. A table of your own.</p>
+              <div className="game-settings">
+                <div className="expert-setting">
+                  <div>
+                    <label htmlFor="expert-mode">Expert mode</label>
+                    <small>One row of cards. Arrange your hand yourself.</small>
+                  </div>
+                  <Switch
+                    id="expert-mode"
+                    checked={expert}
+                    onCheckedChange={setExpert}
+                  />
+                </div>
+                <div className="score-setting">
+                  <label htmlFor="max-score">
+                    Score limit <small>101–151 points</small>
+                  </label>
+                  <input
+                    id="max-score"
+                    type="number"
+                    min={101}
+                    max={151}
+                    step={1}
+                    value={maxScore || ''}
+                    onChange={(e) => setMaxScore(Number(e.target.value))}
+                  />
+                </div>
+                <input
+                  className="score-slider"
+                  aria-label="Score limit slider"
+                  type="range"
+                  min={101}
+                  max={151}
+                  step={1}
+                  value={maxScore || 101}
+                  onChange={(e) => setMaxScore(Number(e.target.value))}
+                />
+                <small>
+                  Settings apply to new tables and bot games. Joining uses the
+                  host’s settings.
+                </small>
+              </div>
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
@@ -672,7 +737,7 @@ export default function Home() {
                   onChange={(e) => setName(e.target.value)}
                   required
                 />
-                <button disabled={busy || !name.trim()}>
+                <button disabled={busy || !name.trim() || !validOptions}>
                   Create a table ↗
                 </button>
               </form>
@@ -699,7 +764,7 @@ export default function Home() {
                 <span>OR PRACTISE SOLO</span>
                 <button
                   className="secondary"
-                  disabled={busy}
+                  disabled={busy || !validOptions}
                   onClick={() => call('practice', undefined, null)}
                 >
                   Play against the dealer
@@ -715,7 +780,7 @@ export default function Home() {
             </div>
             <div className="casino-emblem" aria-hidden="true">
               <span className="emblem-suits">♠ ♦ ♣ ♥</span>
-              <span className="emblem-name">MEHFIL</span>
+              <span className="emblem-name">RUMMY</span>
               <span className="emblem-rule" />
               <span className="emblem-caption">THE RUMMY CLUB</span>
             </div>
@@ -744,9 +809,10 @@ export default function Home() {
                 </button>
               )}
               <button className="quiet" onClick={() => setScores(true)}>
-                Scores{' '}
+                {g.expert ? 'Expert · ' : ''}Scores{' '}
                 <strong>
                   {g.players[g.me].score} : {other?.score || 0}
+                  <small className="score-limit"> / {g.maxScore}</small>
                 </strong>
               </button>
             </div>
@@ -766,6 +832,10 @@ export default function Home() {
                 </p>
                 <button onClick={invite}>Copy invite link ↗</button>
                 <div className="room-code">{g.code}</div>
+                <p>
+                  {g.expert ? 'Expert mode' : 'Standard mode'} · {g.maxScore}
+                  -point limit
+                </p>
                 <small>
                   Keep this browser open. Play starts when they join.
                 </small>
@@ -781,7 +851,7 @@ export default function Home() {
                   >
                     <div className="avatar">
                       {other?.bot ? (
-                        <span className="dealer-monogram">M</span>
+                        <span className="dealer-monogram">R</span>
                       ) : (
                         other?.name[0]?.toUpperCase()
                       )}
@@ -858,25 +928,14 @@ export default function Home() {
                   <button
                     data-drop="discard"
                     onPointerDown={(e) => {
-                      if (
-                        mine &&
-                        g.phase === 'draw' &&
-                        !!g.pile[0] &&
-                        !isWild(g.pile[0], g.wild.r)
-                      )
+                      if (mine && g.phase === 'draw' && !!g.pile[0])
                         motion.start(e, 'open', INCOMING, g.pile[0]);
                     }}
                     className={`pile-item pile-button discard ${drag && mayDiscard ? 'drop-ready' : ''}`}
-                    onClick={() =>
-                      mayDiscard && selected
-                        ? call('discard', selected)
-                        : call('open')
-                    }
-                    disabled={
-                      !mine ||
-                      (g.phase === 'draw' &&
-                        (!g.pile[0] || isWild(g.pile[0], g.wild.r)))
-                    }
+                    onClick={() => {
+                      if (g.phase === 'draw') void call('open');
+                    }}
+                    disabled={!mine || (g.phase === 'draw' && !g.pile[0])}
                   >
                     <div
                       data-discard-card
@@ -904,45 +963,51 @@ export default function Home() {
                       <strong>{g.players[g.me].name}</strong>
                       <span>You · {hand.length} cards</span>
                     </div>
-                    <div className="hand-tools">
-                      <button
-                        className="quiet"
-                        disabled={
-                          !hand.length ||
-                          handGroups.length >= hand.length + 1 ||
-                          !!drag ||
-                          arranging
-                        }
-                        onClick={() => {
-                          const id = GROUP + String(++groupCounter.current);
-                          motion.sort([...order, id]);
-                          requestAnimationFrame(() =>
-                            requestAnimationFrame(() => {
-                              Array.from(
-                                motion.hand.current?.querySelectorAll<HTMLElement>(
-                                  '[data-hand-group]',
-                                ) || [],
-                              )
-                                .find((el) => el.dataset.handGroup === id)
-                                ?.scrollIntoView({
-                                  behavior: 'smooth',
-                                  block: 'nearest',
-                                  inline: 'nearest',
-                                });
-                            }),
-                          );
-                        }}
-                      >
-                        + Group
-                      </button>
-                      <button
-                        className="arrange-button"
-                        disabled={!hand.length || !!drag || arranging}
-                        onClick={arrange}
-                      >
-                        {arranging ? 'Arranging…' : '✦ Arrange'}
-                      </button>
-                    </div>
+                    {!g.expert && (
+                      <div className="hand-tools">
+                        <button
+                          className="quiet"
+                          disabled={
+                            !hand.length ||
+                            handGroups.length >= hand.length + 1 ||
+                            (!!drag && !drag.settling) ||
+                            arranging
+                          }
+                          onClick={() => {
+                            const id = GROUP + String(++groupCounter.current);
+                            motion.sort([...order, id]);
+                            requestAnimationFrame(() =>
+                              requestAnimationFrame(() => {
+                                Array.from(
+                                  motion.hand.current?.querySelectorAll<HTMLElement>(
+                                    '[data-hand-group]',
+                                  ) || [],
+                                )
+                                  .find((el) => el.dataset.handGroup === id)
+                                  ?.scrollIntoView({
+                                    behavior: 'smooth',
+                                    block: 'nearest',
+                                    inline: 'nearest',
+                                  });
+                              }),
+                            );
+                          }}
+                        >
+                          + Group
+                        </button>
+                        <button
+                          className="arrange-button"
+                          disabled={
+                            !hand.length ||
+                            (!!drag && !drag.settling) ||
+                            arranging
+                          }
+                          onClick={arrange}
+                        >
+                          {arranging ? 'Arranging…' : '✦ Arrange'}
+                        </button>
+                      </div>
+                    )}
                   </div>
                   <div
                     ref={motion.hand}
@@ -955,47 +1020,49 @@ export default function Home() {
                         <section
                           key={group.id}
                           data-hand-group={group.id}
-                          className={`hand-group group-${info.kind} ${group.cards.length > 7 ? 'group-scroll' : ''}`}
+                          className={`hand-group ${g.expert ? '' : `group-${info.kind}`} ${group.cards.length > 7 ? 'group-scroll' : ''}`}
                         >
-                          <div className="group-label">
-                            <span>
-                              {info.valid ? '✓ ' : ''}
-                              {info.label}
-                            </span>
-                            <div className="group-label-tools">
-                              <small>
-                                {
-                                  group.cards.filter((c) => c.id !== INCOMING)
-                                    .length
-                                }
-                              </small>
-                              <button
-                                className="remove-group"
-                                aria-label={`Remove ${info.label.toLowerCase()} group; keep its cards`}
-                                disabled={
-                                  handGroups.length < 2 || !!drag || arranging
-                                }
-                                onClick={() =>
-                                  motion.sort(removeGroup(order, group.id))
-                                }
-                              >
-                                ×
-                              </button>
+                          {!g.expert && (
+                            <div className="group-label">
+                              <span>
+                                {info.valid ? '✓ ' : ''}
+                                {info.label}
+                              </span>
+                              <div className="group-label-tools">
+                                <small>
+                                  {
+                                    group.cards.filter((c) => c.id !== INCOMING)
+                                      .length
+                                  }
+                                </small>
+                                <button
+                                  className="remove-group"
+                                  aria-label={`Remove ${info.label.toLowerCase()} group; keep its cards`}
+                                  disabled={
+                                    handGroups.length < 2 ||
+                                    (!!drag && !drag.settling) ||
+                                    arranging
+                                  }
+                                  onClick={() =>
+                                    motion.sort(removeGroup(order, group.id))
+                                  }
+                                >
+                                  ×
+                                </button>
+                              </div>
                             </div>
-                          </div>
+                          )}
                           <div className="group-cards">
                             {group.cards.map((c) => (
                               <button
                                 data-card={c.id}
                                 aria-label={`${rank(c.r)} ${suit[c.s]}`}
-                                aria-pressed={selected === c.id}
                                 key={c.id}
-                                className={`playing-card hand-card ${c.s % 2 ? 'red' : ''} ${selected === c.id ? 'selected' : ''} ${drag?.id === c.id || departingCard === c.id ? 'drag-source' : ''} ${c.id === INCOMING ? 'incoming-slot' : ''}`}
+                                className={`playing-card hand-card ${c.s % 2 ? 'red' : ''} ${drag?.id === c.id || departingCard === c.id ? 'drag-source' : ''} ${c.id === INCOMING ? 'incoming-slot' : ''}`}
                                 onPointerDown={(e) => {
                                   if (c.id !== INCOMING)
                                     motion.start(e, 'hand', c.id, c);
                                 }}
-                                onClick={() => setSelected(c.id)}
                               >
                                 <Face c={c} w={g.wild.r} />
                               </button>
@@ -1010,22 +1077,24 @@ export default function Home() {
                       );
                     })}
                   </div>
-                  <div className="group-progress" aria-live="polite">
-                    <span
-                      className={
-                        groupInfo.some((info) => info.pure) ? 'complete' : ''
-                      }
-                    >
-                      {groupInfo.some((info) => info.pure) ? '✓' : '○'} Pure
-                      sequence
-                    </span>
-                    <span className={sequenceCount >= 2 ? 'complete' : ''}>
-                      {Math.min(sequenceCount, 2)}/2 sequences
-                    </span>
-                    <span>
-                      {validCount}/{hand.length} grouped
-                    </span>
-                  </div>
+                  {!g.expert && (
+                    <div className="group-progress" aria-live="polite">
+                      <span
+                        className={
+                          groupInfo.some((info) => info.pure) ? 'complete' : ''
+                        }
+                      >
+                        {groupInfo.some((info) => info.pure) ? '✓' : '○'} Pure
+                        sequence
+                      </span>
+                      <span className={sequenceCount >= 2 ? 'complete' : ''}>
+                        {Math.min(sequenceCount, 2)}/2 sequences
+                      </span>
+                      <span>
+                        {validCount}/{hand.length} grouped
+                      </span>
+                    </div>
+                  )}
                   <div className="hand-hint">
                     Arrange prioritizes a pure sequence, two sequences, then the
                     most grouped cards. Invalid declarations cost 80 points.
@@ -1040,20 +1109,18 @@ export default function Home() {
                     </button>
                     <div>
                       {g.status === 'ended' ? (
-                        <button onClick={() => call('next')} disabled={busy}>
-                          Play next round ↗
+                        <button
+                          onClick={() =>
+                            g.matchOver ? setScores(true) : call('next')
+                          }
+                          disabled={busy}
+                        >
+                          {g.matchOver
+                            ? 'Final scoreboard ↗'
+                            : 'Play next round ↗'}
                         </button>
                       ) : (
                         <>
-                          <button
-                            className="secondary"
-                            disabled={
-                              !mayDiscard || !selected || selected === g.picked
-                            }
-                            onClick={() => call('discard', selected!)}
-                          >
-                            Discard
-                          </button>
                           <button
                             disabled={!mayDiscard || hand.length !== 14}
                             onClick={() => call('declare')}
@@ -1087,7 +1154,7 @@ export default function Home() {
       </section>
       {error && (
         <div className="notice" role="status" onClick={() => setError('')}>
-          {error}{' '}
+          <span>{error}</span>
           <button className="quiet" aria-label="Dismiss message">
             ×
           </button>
@@ -1112,7 +1179,11 @@ export default function Home() {
             'The private rummy club.'
           )}
         </span>
-        <span>PLAY FOR POINTS · NO STAKES</span>
+        <span>
+          {g
+            ? 'Drag to discard · Jokers may be dropped'
+            : 'PLAY FOR POINTS · NO STAKES'}
+        </span>
         {g && (
           <button className="quiet" onClick={() => setConfirm('leave')}>
             Leave table
@@ -1152,7 +1223,7 @@ export default function Home() {
             <li>
               Sets contain 3–4 equal ranks in different suits. Printed jokers
               and the wild rank can replace cards. A wild card used naturally
-              can be in a pure sequence.
+              can be in a pure sequence or a natural set.
             </li>
             <li>
               With 14 cards on your turn, press Declare. We automatically choose
@@ -1167,8 +1238,24 @@ export default function Home() {
           </p>
           <p>
             First drop: 20 · Later drop: 40 · Invalid declaration: 80. Lower
-            total wins. Two decks plus two printed jokers. Discarded jokers
-            cannot be picked up.
+            total wins. The match ends when either total reaches the chosen
+            score limit. Two decks plus two printed jokers.
+          </p>
+          <p>
+            A hand made entirely of natural sets or entirely of natural
+            sequences wins double points: the opponent’s normal penalty is
+            doubled after the 80-point cap (up to 160). All-natural sets are a
+            special win without the usual sequence requirement. Wild-rank cards
+            may count as their own rank and suit; printed jokers must first be
+            dropped to gain a fixed value.
+          </p>
+          <p>
+            To drop any joker, drag it to the discard pile as your normal
+            discard. It permanently loses wild status for this round. A
+            wild-rank card keeps its face; a printed joker becomes the exact
+            rank and suit of the displayed wild indicator. Either player can
+            pick it up on a later turn. A card just picked up cannot be returned
+            immediately.
           </p>
           <a
             href="https://www.rummycircle.com/how-to-play-rummy/cards-in-Rummy.pdf"
@@ -1182,15 +1269,37 @@ export default function Home() {
       <Dialog open={scores} onOpenChange={setScores}>
         <DialogContent className="modal wide score-modal">
           <DialogTitle>
-            {g?.status === 'ended'
-              ? `Round ${g.round} · Table results`
-              : 'The scorecard'}
+            {g?.matchOver
+              ? 'Final scoreboard'
+              : g?.status === 'ended'
+                ? `Round ${g.round} · Table results`
+                : 'The scorecard'}
           </DialogTitle>
           <DialogDescription>
             Penalty points · Lower is better
+            {g ? ` · ${g.maxScore}-point limit` : ''}
           </DialogDescription>
           {g && (
             <>
+              {g.matchOver && (
+                <div className="match-winner">
+                  <span>♠ MATCH COMPLETE</span>
+                  <h2>
+                    {g.winner === null || g.winner === undefined
+                      ? 'A tied match'
+                      : `${g.players[g.winner].name} wins`}
+                  </h2>
+                  <p>The {g.maxScore}-point limit has been reached.</p>
+                  <div>
+                    <button onClick={leave} className="secondary">
+                      Return to menu
+                    </button>
+                    <button disabled={busy} onClick={() => call('restart')}>
+                      Play again ↗
+                    </button>
+                  </div>
+                </div>
+              )}
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1204,7 +1313,14 @@ export default function Home() {
                   {g.history.length ? (
                     g.history.map((h) => (
                       <TableRow key={h.round}>
-                        <TableCell>{h.round}</TableCell>
+                        <TableCell>
+                          {h.round}
+                          {h.multiplier === 2 && (
+                            <small className="bonus-tag">
+                              2× natural {h.bonus}
+                            </small>
+                          )}
+                        </TableCell>
                         {h.points.map((p, i) => (
                           <TableCell key={i}>+{p}</TableCell>
                         ))}
@@ -1228,7 +1344,7 @@ export default function Home() {
                 </TableFooter>
               </Table>
               {g.status === 'ended' && <RoundHands game={g} />}
-              {g.status === 'ended' && (
+              {g.status === 'ended' && !g.matchOver && (
                 <button
                   className="score-next"
                   disabled={busy}
@@ -1267,7 +1383,7 @@ export default function Home() {
                   if (!ok) return;
                 }
                 leave();
-              } else await call(a, selected || undefined);
+              } else await call(a);
             }}
           >
             {confirm === 'drop' ? 'Drop round' : 'Leave table'}

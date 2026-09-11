@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import ArrangeWorker from '@/lib/arrange.worker?worker';
 import { describeGroup } from '@/lib/arrange';
-import { type Card, value } from '@/lib/game';
+import { type Card, type RoundResult, value } from '@/lib/game';
 import { CardFace } from './card-face';
 type ResultGame = {
   code: string;
@@ -10,7 +10,7 @@ type ResultGame = {
   message: string;
   wild: Card;
   players: { name: string; hand: Card[]; score: number; draws: number }[];
-  history: { round: number; points: number[]; message: string }[];
+  history: RoundResult[];
 };
 export function RoundHands({ game }: { game: ResultGame }) {
   const [grouped, setGrouped] = useState<string[][][] | null>(null);
@@ -60,7 +60,17 @@ export function RoundHands({ game }: { game: ResultGame }) {
         <span className="verdict-suit">♠</span>
         <div>
           <strong>{game.message}</strong>
-          <p>Both hands revealed · Wild rank shown with W</p>
+          <p>
+            Both hands revealed · Wild cards marked W · Dropped jokers marked
+            FIXED
+          </p>
+          {round?.multiplier === 2 && (
+            <p className="bonus-calculation">
+              {round.basePoints} base penalty × 2 ={' '}
+              {round.points.find((p) => p > 0) || 0} points · Natural{' '}
+              {round.bonus}
+            </p>
+          )}
         </div>
       </div>
       <p className="review-note">
@@ -99,18 +109,26 @@ export function RoundHands({ game }: { game: ResultGame }) {
                 <span>this round · {p.score} total</span>
               </div>
             </div>
-            {grouped && (
+            {round?.winner === i && round.bonus === 'sets' ? (
               <div className="review-requirements">
-                <span className={pure ? 'met' : ''}>
-                  {pure ? '✓' : '○'} Pure sequence
-                </span>
-                <span className={sequences >= 2 ? 'met' : ''}>
-                  {Math.min(sequences, 2)}/2 sequences
-                </span>
-                <span>
-                  {melded}/{p.hand.length} in melds
+                <span className="met">
+                  ✓ All-natural sets · Special winning hand · 2× points
                 </span>
               </div>
+            ) : (
+              grouped && (
+                <div className="review-requirements">
+                  <span className={pure ? 'met' : ''}>
+                    {pure ? '✓' : '○'} Pure sequence
+                  </span>
+                  <span className={sequences >= 2 ? 'met' : ''}>
+                    {Math.min(sequences, 2)}/2 sequences
+                  </span>
+                  <span>
+                    {melded}/{p.hand.length} in melds
+                  </span>
+                </div>
+              )
             )}
             <div className="review-groups">
               {groups.map((cards, j) => (

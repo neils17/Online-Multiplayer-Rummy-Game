@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Mehfil · Indian Rummy',
+  title: 'Rummy',
   icons: { icon: '/favicon.svg' },
   description:
     'Your private two-player Indian rummy table. Play with a friend, anywhere.',
@@ -27,7 +27,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        <link rel="preload" as="image" href="/cards/B-2.svg" />
+        <link rel="preload" as="image" href="/cards/rider-back.jpg" />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}

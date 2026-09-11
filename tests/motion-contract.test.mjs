@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
-import { pathToFileURL } from 'node:url';
 import { writeFileSync } from 'node:fs';
 // Exercise pointer/animation orchestration in Node. No browser or screenshot QA.
 const fake = `export const slots=[]; export const states=[];
@@ -84,8 +83,7 @@ async function gesture({
 } = {}) {
   let order = ['~group:a', 'old'];
   let draws = 0,
-    discards = 0,
-    selected = null;
+    discards = 0;
   const card = { id: 'new', r: 7, s: 1 };
   let release;
   const drawPromise = slow
@@ -96,7 +94,6 @@ async function gesture({
     (next) => {
       order = next;
     },
-    (v) => (selected = v),
     async () => {
       draws++;
       return drawPromise;
@@ -147,7 +144,13 @@ async function gesture({
     1,
     'exactly one destination card',
   );
-  assert.equal(selected, null, 'landed card is level and unselected');
+  assert.equal(
+    motion.ghost.current.style.transform,
+    direct && !cancel
+      ? 'translate3d(140px,0px,0) rotate(0deg) scale(1,1)'
+      : 'translate3d(-70px,230px,0) rotate(0deg) scale(1,1)',
+    'card settles exactly onto its real destination, flat and at full size',
+  );
   let prevented = false;
   motion.click({
     detail: 1,

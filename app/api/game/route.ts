@@ -1,7 +1,7 @@
 import { getDb } from '@/db';
 import { rooms } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { act, deal, type Game } from '@/lib/game';
+import { act, deal, droppedCard, gameOptions, type Game } from '@/lib/game';
 import { advanceBot, scheduleBot } from '@/lib/bot';
 const reply = (data: unknown, status = 200) =>
   Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -10,13 +10,21 @@ function view(g: Game, i: number, code: string, revision = 0) {
     code,
     revision,
     ...g,
+    expert: g.expert ?? false,
+    maxScore: g.maxScore ?? 101,
+    match: g.match ?? 1,
+    message: g.message.replaceAll('Mehfil Bot', 'Rummy Bot'),
+    history: g.history.map((h) => ({
+      ...h,
+      message: h.message.replaceAll('Mehfil Bot', 'Rummy Bot'),
+    })),
     deck: undefined,
     botAt: undefined,
     remaining: g.deck.length,
-    pile: g.pile.slice(-1),
-    underDiscard: g.pile.at(-2) || null,
+    pile: g.pile.slice(-1).map((c) => droppedCard(c, g.wild)),
+    underDiscard: g.pile.at(-2) ? droppedCard(g.pile.at(-2)!, g.wild) : null,
     players: g.players.map((p, j) => ({
-      name: p.name,
+      name: p.bot ? 'Rummy Bot' : p.name,
       bot: !!p.bot,
       score: p.score,
       count: p.hand.length,
@@ -34,6 +42,8 @@ export async function POST(req: Request) {
       code?: string;
       token?: string;
       cardId?: string;
+      expert?: boolean;
+      maxScore?: number;
     };
     const db = getDb();
     const name =
@@ -47,7 +57,12 @@ export async function POST(req: Request) {
         .slice(0, 8)
         .toUpperCase();
       const token = crypto.randomUUID();
+      const options = gameOptions(b.expert, b.maxScore);
       const g: Game = {
+        ...options,
+        match: 1,
+        matchOver: false,
+        winner: null,
         players: [{ name, token, hand: [], score: 0, draws: 0 }],
         deck: [],
         pile: [],
@@ -62,7 +77,7 @@ export async function POST(req: Request) {
       };
       if (b.action === 'practice') {
         g.players.push({
-          name: 'Mehfil Bot',
+          name: 'Rummy Bot',
           token: crypto.randomUUID(),
           hand: [],
           score: 0,
@@ -80,6 +95,21 @@ export async function POST(req: Request) {
     if (!row)
       return reply({ error: 'Table not found. Check your room code.' }, 404);
     const g: Game = JSON.parse(row.state);
+    g.expert ??= false;
+    g.maxScore ??= 101;
+    g.match ??= 1;
+    if (g.status === 'ended' && g.players.some((p) => p.score >= g.maxScore!)) {
+      g.matchOver = true;
+      g.winner =
+        g.players[0].score === g.players[1].score
+          ? null
+          : g.players[0].score < g.players[1].score
+            ? 0
+            : 1;
+    }
+    g.players.forEach((p) => {
+      if (p.bot) p.name = 'Rummy Bot';
+    });
     let i = g.players.findIndex((p) => p.token === b.token);
     let token = b.token;
     let botMoved = false;

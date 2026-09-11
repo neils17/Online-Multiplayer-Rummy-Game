@@ -1,6 +1,7 @@
 import {
   act,
-  analyze,
+  winningDiscard,
+  droppedCard,
   isWild,
   meld,
   value,
@@ -64,9 +65,10 @@ export function advanceBot(g: Game, now = Date.now()) {
     p = g.players[i];
   if (g.status !== 'playing' || !p?.bot || now < (g.botAt ?? 0)) return false;
   if (g.phase === 'draw') {
-    const top = g.pile.at(-1);
+    const visible = g.pile.at(-1);
+    const top = visible ? droppedCard(visible, g.wild) : undefined;
     let takeOpen = false;
-    if (top && !isWild(top, g.wild.r)) {
+    if (top) {
       const combined = [...p.hand, top];
       const worst = chooseBotDiscard(combined, g.wild.r, top.id);
       takeOpen =
@@ -76,8 +78,7 @@ export function advanceBot(g: Game, now = Date.now()) {
     act(g, i, takeOpen ? 'open' : 'draw');
   } else {
     const discard = chooseBotDiscard(p.hand, g.wild.r, g.picked);
-    const remaining = p.hand.filter((c) => c.id !== discard.id);
-    const wins = analyze(remaining, g.wild.r).valid;
+    const wins = !!winningDiscard(p.hand, g.wild.r, g.picked);
     act(g, i, wins ? 'declare' : 'discard', discard.id);
   }
   scheduleBot(g, now);

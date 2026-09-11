@@ -24,7 +24,6 @@ type Gesture = {
 export function useCardMotion(
   order: string[],
   setOrder: React.Dispatch<React.SetStateAction<string[]>>,
-  select: (id: string | null) => void,
   onDraw: (source: 'draw' | 'open') => Promise<Card | null>,
   onDiscard: (id: string, animate: () => Promise<void>) => Promise<boolean>,
   gameKey: string,
@@ -37,6 +36,7 @@ export function useCardMotion(
   const before = useRef(new Map<string, DOMRect>());
   const animations = useRef(new Map<HTMLElement, Animation>());
   const frame = useRef(0);
+  const landingDone = useRef<(() => void) | null>(null);
   const lastPaint = useRef(0);
   const suppress = useRef(false);
   const suppressAt = useRef({ x: 0, y: 0 });
@@ -69,7 +69,7 @@ export function useCardMotion(
     animations.current.clear();
     const targets = els.map((el) => ({ el, r: el.getBoundingClientRect() }));
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    targets.forEach(({ el, r }, index) => {
+    targets.forEach(({ el, r }) => {
       const old = starts.get(el);
       if (el.dataset.card === active.current?.id) return;
       if (!old) return;
@@ -236,24 +236,19 @@ export function useCardMotion(
     if (!d.moved) {
       d.moved = true;
       setDrag({ ...d });
-      if (d.source === 'hand') select(d.id);
     }
     if (!frame.current) frame.current = requestAnimationFrame(paint);
   }
   function cleanup() {
+    landingDone.current?.();
+    landingDone.current = null;
     cancelAnimationFrame(frame.current);
     frame.current = 0;
     lastPaint.current = 0;
-    // A completed drag returns to the normal hand layer, not the selected layer.
-    if (
-      active.current &&
-      (active.current.moved || active.current.source !== 'hand')
-    )
-      select(null);
     active.current = null;
     setDrag(null);
   }
-  async function land(rect: DOMRect, keep = false) {
+  async function land(destination: DOMRect | (() => DOMRect), keep = false) {
     const d = active.current,
       el = ghost.current;
     if (!d || !el) {
@@ -262,27 +257,55 @@ export function useCardMotion(
     }
     cancelAnimationFrame(frame.current);
     paint();
-    const animation = el.animate(
-      [
-        { transform: el.style.transform },
-        {
-          transform: `translate3d(${rect.left - d.origin.left}px,${rect.top - d.origin.top}px,0) rotate(0deg) scale(${rect.width / d.origin.width},${rect.height / d.origin.height})`,
-        },
-      ],
-      {
-        duration: matchMedia('(prefers-reduced-motion: reduce)').matches
-          ? 0
-          : 260,
-        easing: 'cubic-bezier(.22,1,.36,1)',
-        fill: 'forwards',
-      },
-    );
-    try {
-      await animation.finished;
-    } catch {}
-    if (!keep) flushSync(cleanup);
-    // Remove finished fill-forwards effects after the real card takes over.
-    if (!keep) animation.cancel();
+    const target = () =>
+      typeof destination === 'function' ? destination() : destination;
+    const dx = d.px - d.x,
+      dy = d.py - d.y;
+    const position = [
+      d.origin.left + dx,
+      d.origin.top + dy,
+      d.origin.width * 1.025,
+      d.origin.height * 1.025,
+      Math.max(-7, Math.min(7, dx / 32)),
+    ];
+    const velocity = [0, 0, 0, 0, 0];
+    await new Promise<void>((resolve) => {
+      landingDone.current = resolve;
+      let previous = 0;
+      const tick = (now: number) => {
+        if (active.current !== d || !ghost.current) {
+          resolve();
+          return;
+        }
+        const dt = Math.min((now - (previous || now - 16.67)) / 1000, 0.032);
+        previous = now;
+        const rect = target();
+        const goal = [rect.left, rect.top, rect.width, rect.height, 0];
+        const omega = 21,
+          decay = Math.exp(-omega * dt);
+        for (let i = 0; i < position.length; i++) {
+          const delta = position[i] - goal[i],
+            c = velocity[i] + omega * delta;
+          position[i] = goal[i] + (delta + c * dt) * decay;
+          velocity[i] = (velocity[i] - omega * c * dt) * decay;
+        }
+        const settled =
+          matchMedia('(prefers-reduced-motion: reduce)').matches ||
+          (position.every((p, i) => Math.abs(p - goal[i]) < 0.15) &&
+            velocity.every((v) => Math.abs(v) < 2));
+        const p = settled ? goal : position;
+        el.style.transform = `translate3d(${p[0] - d.origin.left}px,${p[1] - d.origin.top}px,0) rotate(${p[4]}deg) scale(${p[2] / d.origin.width},${p[3] / d.origin.height})`;
+        if (settled) {
+          frame.current = 0;
+          resolve();
+          return;
+        }
+        frame.current = requestAnimationFrame(tick);
+      };
+      frame.current = requestAnimationFrame(tick);
+    });
+    landingDone.current = null;
+    if (!keep && active.current === d) flushSync(cleanup);
   }
   const nextFrame = () =>
     new Promise<void>((resolve) =>
@@ -299,16 +322,14 @@ export function useCardMotion(
         suppress.current = false;
       }, 500);
       cleanup();
-      if (!cancel) {
-        if (d.source === 'hand') select(d.id);
-        else await onDraw(d.source);
-      }
+      if (!cancel && d.source !== 'hand') await onDraw(d.source);
       return;
     }
     d.px = e.clientX;
     d.py = e.clientY;
     if (!cancel && inHand(d.px, d.py)) placeInHand(d, d.px, d.py);
     d.settling = true;
+    setDrag({ ...d });
     cancelAnimationFrame(frame.current);
     frame.current = 0;
     suppress.current = true;
@@ -342,7 +363,6 @@ export function useCardMotion(
       }
       d.id = id;
       d.face = card;
-      select(id);
       update(
         orderRef.current
           .filter((c) => c !== id)
@@ -367,8 +387,12 @@ export function useCardMotion(
         }
       }
       await nextFrame();
-      const target = elements().find((el) => el.dataset.card === id);
-      await land(target?.getBoundingClientRect() || d.origin);
+      await land(
+        () =>
+          elements()
+            .find((el) => el.dataset.card === id)
+            ?.getBoundingClientRect() || d.origin,
+      );
       return;
     }
     const target = document
@@ -386,8 +410,12 @@ export function useCardMotion(
       }
     }
     await nextFrame();
-    const slot = elements().find((el) => el.dataset.card === d.id);
-    await land(slot?.getBoundingClientRect() || d.origin);
+    await land(
+      () =>
+        elements()
+          .find((el) => el.dataset.card === d.id)
+          ?.getBoundingClientRect() || d.origin,
+    );
   }
   function click(e: React.MouseEvent) {
     if (
@@ -406,6 +434,7 @@ export function useCardMotion(
   useEffect(() => {
     return () => {
       cancelAnimationFrame(frame.current);
+      landingDone.current?.();
       if (suppressTimer.current) clearTimeout(suppressTimer.current);
       animations.current.forEach((a) => a.cancel());
       active.current = null;

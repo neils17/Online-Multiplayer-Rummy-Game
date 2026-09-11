@@ -2026,7 +2026,7 @@ footer .quiet {
   }
 }
 
-/* MEHFIL — the classic private casino. */
+/* RUMMY — the classic private casino. */
 :root {
   --background: #0c1110;
   --foreground: #eee7d7;
@@ -3308,4 +3308,210 @@ small,
 .casino.game-shell .actions {
   grid-row: 5;
   align-self: stretch;
+}
+
+/* Shared match setup, kept inside the casino menu. */
+.casino .game-settings {
+  width: min(100%, 430px);
+  margin: 18px 0;
+  padding: 16px;
+  border: 1px solid #9f885355;
+  border-radius: 12px;
+  background: #09291dcc;
+  text-align: left;
+}
+.game-settings .expert-setting,
+.game-settings .score-setting {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+.game-settings label {
+  font-size: 15px;
+  font-weight: 600;
+  color: #eadab4;
+}
+.casino .game-settings small {
+  display: block;
+  color: #b0c1ac;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.game-settings .score-setting {
+  margin-top: 16px;
+}
+.casino .game-settings input[type='number'] {
+  width: 82px;
+  min-width: 0;
+  padding: 7px 10px;
+  color: #f0dfb8;
+  background: #10261d;
+  border: 1px solid #967c4d;
+  text-align: center;
+}
+.casino .game-settings .score-slider {
+  width: 100%;
+  margin: 10px 0;
+  padding: 0;
+  height: 22px;
+  accent-color: #d6b467;
+}
+.casino .game-settings [data-slot='switch'] {
+  padding: 0;
+  width: 38px;
+  height: 24px;
+  min-height: 0;
+  border-radius: 20px;
+  background: #536458;
+  box-shadow: none;
+}
+.casino .game-settings [data-slot='switch'][data-checked] {
+  background: #c5a35b;
+}
+.casino .game-settings [data-slot='switch-thumb'] {
+  width: 20px;
+  height: 20px;
+  background: #f2ead8;
+}
+.casino .score-limit {
+  color: #b9c4af;
+  font-size: 11px;
+}
+.casino.game-shell .opponent .avatar {
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  flex: 0 0 30px;
+  display: grid;
+  place-items: center;
+  overflow: visible;
+}
+.casino .dealer-monogram {
+  font-size: 20px;
+  line-height: 1;
+}
+@media (max-height: 680px) {
+  .casino.game-shell .opponent .avatar {
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    flex-basis: 24px;
+  }
+  .casino .dealer-monogram {
+    font-size: 17px;
+  }
+}
+/* Clip the photographed upper edge so both ends have a clean white margin. */
+.card-back,
+.playing-card.card-back,
+.casino .deck {
+  background-size: 100% 102%;
+  background-position: center bottom;
+}
+.casino .notice {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+  padding: 12px 14px 12px 38px;
+}
+.casino .notice > span {
+  text-align: center;
+  line-height: 1.5;
+}
+.casino .notice > button {
+  padding: 2px 4px;
+  margin: 0;
+}
+.casino.game-shell.expert-mode .hand {
+  align-items: center;
+}
+.casino.game-shell.expert-mode .hand-group {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  min-width: 0;
+}
+.casino.game-shell.expert-mode .group-cards {
+  overflow: visible;
+}
+.casino.game-shell.expert-mode .hand-area {
+  grid-template-rows: 34px minmax(0, 1fr) 0px 0px 44px;
+}
+.casino.game-shell .hand-card:hover,
+.casino.game-shell .hand-card:focus {
+  transform: none;
+}
+.playing-card .fixed-marker {
+  position: absolute;
+  left: 3px;
+  bottom: 3px;
+  padding: 2px 3px;
+  border-radius: 3px;
+  background: #15382d;
+  color: #f4dfaa;
+  font: 700 8px/1 sans-serif;
+}
+.match-winner {
+  padding: 24px;
+  text-align: center;
+  border: 1px solid #bc9957;
+  border-radius: 14px;
+  background: radial-gradient(ellipse at top, #34563a, #14291e);
+}
+.match-winner > span {
+  font-size: 12px;
+  letter-spacing: 3px;
+  color: #dfc484;
+}
+.match-winner h2 {
+  font:
+    600 32px Georgia,
+    serif;
+  margin: 12px 0;
+  color: #f5e7be;
+}
+.match-winner p {
+  color: #b9c9b6;
+}
+.match-winner > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 20px;
+}
+.score-modal .bonus-tag {
+  display: block;
+  color: #e7c26d;
+  font-size: 11px;
+}
+/* Symmetric message layout keeps the words centered independently of ×. */
+.casino .notice[role='status'] {
+  grid-template-columns: 24px minmax(0, 1fr) 24px;
+  padding: 12px 14px;
+}
+.casino .notice[role='status'] > span {
+  grid-column: 2;
+}
+.casino .notice[role='status'] > button {
+  grid-column: 3;
+}
+.card-back,
+.playing-card.card-back,
+.casino .deck {
+  background-image:
+    linear-gradient(
+      to bottom,
+      #fff 0%,
+      #fff 2.6%,
+      transparent 3%,
+      transparent 100%
+    ),
+    url('/cards/rider-back.jpg');
+  background-size: 100% 100%;
+  background-position: center;
 }

@@ -4225,3 +4225,66 @@ body {
 .shell.casino.game-shell {
   padding: 10px 12px 6px;
 }
+/* Remove the old scrolling rail's spacer items from the fitted flex layout. */
+.shell.casino.game-shell .hand::before,
+.shell.casino.game-shell .hand::after {
+  content: none;
+  display: none;
+}
+.shell.casino.game-shell .waiting,
+.shell.casino.game-shell .result {
+  overflow: hidden;
+}
+.shell.casino.game-shell .waiting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.shell.casino.game-shell .waiting h1 {
+  font-size: 38px;
+  line-height: 1.05;
+  margin: 0;
+}
+.shell.casino.game-shell .waiting p {
+  font-size: 14px;
+  margin: 0;
+}
+.shell.casino.game-shell .waiting .seat-orbit {
+  width: 60px;
+  height: 60px;
+  margin: 0;
+}
+.shell.casino.game-shell .waiting .room-code {
+  font-size: 24px;
+  margin: 0;
+}
+.shell.casino.game-shell .waiting button {
+  min-height: 34px;
+  padding: 8px 14px;
+}
+:root[data-layout='portrait'] .shell.casino.game-shell .opponent {
+  flex: 0 0 42px;
+  height: 42px;
+}
+:root[data-layout='portrait'] .shell.casino.game-shell .opponent-cards {
+  flex: 0 0 40px;
+  height: 40px;
+  width: 247px;
+}
+:root[data-layout='portrait']
+  .shell.casino.game-shell
+  .opponent-cards
+  .card-back {
+  flex: 0 0 28px;
+  width: 28px;
+  height: 39.2px;
+  margin-left: -11.2px;
+}
+:root[data-layout='portrait']
+  .shell.casino.game-shell
+  .opponent-cards
+  .card-back:first-child {
+  margin-left: 0;
+}

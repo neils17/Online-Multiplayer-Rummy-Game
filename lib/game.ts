@@ -178,7 +178,7 @@ export function naturalCompletion(hand: Card[], picked: string | null = null) {
         if (isSequence) sequences[i].push(mask);
       }
   }
-  for (const kind of ['sequences'] as ('sets' | 'sequences')[]) {
+  for (const kind of ['sets', 'sequences'] as const) {
     const candidates = kind === 'sets' ? sets : sequences;
     const memo = new Map<number, number[] | null>();
     function solve(mask: number): number[] | null {

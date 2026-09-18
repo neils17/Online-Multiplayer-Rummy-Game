@@ -35,7 +35,7 @@ assert.throws(() => gameOptions(false, 101, 3));
 const noPure = Array.from({ length: 13 }, (_, i) => ({
   id: `low${i}`,
   r: 2,
-  s: i % 4,
+  s: 0,
 }));
 assert.equal(
   analyze(noPure, 9).penalty,
@@ -47,7 +47,7 @@ const onePure = [
   ...Array.from({ length: 10 }, (_, i) => ({
     id: `repeat${i}`,
     r: 8,
-    s: i % 4,
+    s: 0,
   })),
 ];
 assert.equal(analyze(onePure, 9).penalty, 80, 'one pure alone exempts nothing');
@@ -141,4 +141,41 @@ act(bot, 0, 'next');
 assert.equal(bot.round, 2);
 console.log(
   'PASS: 1/2 decks, exact 80-point sequence gate, meld exemptions, natural double bonus, winning discard, loss-preventing drops, immediate rediscard, both-player readiness and bot readiness.',
+);
+
+const allSets = [
+  ...cards([2, 5, 8, 11], 0),
+  ...cards([2, 5, 8, 11], 1),
+  ...cards([2, 5, 8, 11], 2),
+  ...cards([11], 3),
+];
+assert.equal(naturalCompletion(allSets).kind, 'sets');
+assert.equal(
+  analyze(allSets, 5).valid,
+  true,
+  'wild rank used naturally counts in a set',
+);
+const special = make();
+special.wild = { id: 'w', r: 5, s: 0 };
+special.players[0].hand = [...allSets, { id: 'unused', r: 0, s: 0 }];
+special.players[1].hand = qualified;
+special.phase = 'discard';
+assert.equal(winningDiscard(special.players[0].hand, 5, null).id, 'unused');
+const expectedPenalty = analyze(qualified, 5).penalty;
+act(special, 0, 'declare');
+assert.equal(special.history[0].bonus, 'sets');
+assert.equal(special.history[0].multiplier, 2);
+assert.equal(special.players[1].score, expectedPenalty * 2);
+assert.equal(special.history[0].discard.id, 'unused');
+const substituted = allSets.map((c, i) =>
+  i === 0 ? { id: 'printed', r: 0, s: 0 } : c,
+);
+assert.equal(
+  naturalCompletion(substituted),
+  null,
+  'joker substitution is not a natural set',
+);
+assert.equal(analyze(substituted, 5).valid, false);
+console.log(
+  'PASS: all-natural sets win without sequences, natural wild-rank usage, automatic spare selection and double opponent penalty; substituted jokers remain ineligible.',
 );

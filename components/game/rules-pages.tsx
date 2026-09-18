@@ -31,8 +31,9 @@ export function RulesPages({
             <h3>A winning hand</h3>
             <p>
               Arrange 13 cards into sets and sequences of at least three cards.
-              You need two sequences, including one pure sequence. Aces can be
-              low or high, but cannot wrap around.
+              Normally you need two sequences, including one pure sequence. An
+              all-natural sets hand is a special valid win without sequences.
+              Aces can be low or high, but cannot wrap around.
             </p>
             <p>
               Sets use 3–4 equal ranks in different suits. A pure sequence uses
@@ -97,10 +98,11 @@ export function RulesPages({
             </p>
             <h3>Natural hand bonus · 2×</h3>
             <p>
-              A hand made entirely of natural sequences doubles the opponent’s
-              normal penalty, after the 80-point cap (up to 160). The
-              pure-sequence and second-sequence requirements apply to every
-              hand.
+              A hand made entirely of natural sets OR entirely of natural
+              sequences doubles the opponent’s normal penalty, after the
+              80-point cap (up to 160). All-natural sets are a special valid win
+              without sequences. Jokers may count as their own rank and suit,
+              but cannot replace missing cards for this bonus.
             </p>
             <h3>The match</h3>
             <p>

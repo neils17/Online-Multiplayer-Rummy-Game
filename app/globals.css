@@ -4487,3 +4487,19 @@ body {
 .discard-layer .fixed-marker {
   max-width: 86%;
 }
+
+.score-modal .review-group.winning-discard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 10px;
+}
+.score-modal .winning-discard .review-group-label {
+  justify-content: center;
+  width: 100%;
+  text-align: center;
+}
+.score-modal .winning-discard .review-cards {
+  justify-content: center;
+  width: 100%;
+}

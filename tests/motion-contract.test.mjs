@@ -396,3 +396,62 @@ console.log(
     'PASS: top-right cross-group target remains stationary until a single insertion on release.',
   );
 }
+// Both piles preview insertion before release, including before a draw resolves.
+for (const source of ['draw', 'open']) {
+  let order = ['~group:a', 'a', 'b', 'c'];
+  const group = {
+    dataset: { handGroup: '~group:a' },
+    offsetWidth: 300,
+    getBoundingClientRect: () => rect(0, 300, 300, 126),
+    querySelectorAll: () =>
+      order.filter((id) => !id.startsWith('~')).map(cardEl),
+  };
+  function cardEl(id) {
+    const slot = order.filter((id) => !id.startsWith('~')).indexOf(id);
+    return {
+      ...element(rect(slot * 45, 300), { card: id }),
+      offsetWidth: 90,
+      offsetLeft: slot * 45,
+      offsetParent: group,
+    };
+  }
+  const motion = useCardMotion(
+    order,
+    (next) => (order = next),
+    async () => ({ id: 'new', r: 4, s: 0 }),
+    async () => false,
+    'pile-preview',
+  );
+  motion.hand.current = {
+    getBoundingClientRect: () => handRect,
+    querySelectorAll: (selector) =>
+      selector === '[data-card]' ? group.querySelectorAll() : [group],
+  };
+  motion.ghost.current = element(pileRect);
+  const target = {
+    querySelector: () => element(pileRect),
+    closest: () => ({ setPointerCapture() {} }),
+  };
+  motion.start(
+    event(280, 120, target),
+    source,
+    INCOMING,
+    source === 'open' ? { id: 'new', r: 4, s: 0 } : null,
+  );
+  motion.move(event(5, 340, target));
+  await new Promise((r) => setTimeout(r, 20));
+  assert.deepEqual(order, ['~group:a', INCOMING, 'a', 'b', 'c']);
+  motion.move(event(240, 340, target));
+  await new Promise((r) => setTimeout(r, 20));
+  assert.deepEqual(order, ['~group:a', 'a', 'b', 'c', INCOMING]);
+  motion.move(event(280, 150, target));
+  await new Promise((r) => setTimeout(r, 20));
+  assert.ok(!order.includes(INCOMING), 'leaving hand closes preview gap');
+  motion.move(event(5, 340, target));
+  await new Promise((r) => setTimeout(r, 20));
+  await motion.end(event(5, 340, target));
+  assert.deepEqual(order, ['~group:a', 'new', 'a', 'b', 'c']);
+}
+console.log(
+  'PASS: draw/open cards preview moving hand slots, close gaps outside hand and retain chosen position on release.',
+);

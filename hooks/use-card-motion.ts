@@ -234,9 +234,10 @@ export function useCardMotion(
     zones.forEach((el) => {
       el.dataset.dropTarget = String(el.dataset.handGroup === group);
     });
-    // Only rearrange within the source group while hovering. Cross-group moves
-    // are committed once on release, so targets cannot wrap away from a finger.
-    if (!release && (d.source !== 'hand' || group !== d.sourceGroup)) return;
+    // Existing hand cards keep cross-group targets stable until release. Cards
+    // from either pile preview their insertion with the animated incoming slot;
+    // cached group bounds keep that slot from chasing a resizing target.
+    if (!release && d.source === 'hand' && group !== d.sourceGroup) return;
     const els = Array.from(
       zone.querySelectorAll<HTMLElement>('[data-card]'),
     ).filter((el) => el.dataset.card !== d.id);

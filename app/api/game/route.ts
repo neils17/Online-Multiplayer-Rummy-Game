@@ -1,7 +1,13 @@
 import { getDb } from '@/db';
 import { rooms } from '@/db/schema';
 import { eq, and } from 'drizzle-orm';
-import { act, deal, gameOptions, type Game } from '@/lib/game';
+import {
+  act,
+  deal,
+  gameOptions,
+  assertDeckIntegrity,
+  type Game,
+} from '@/lib/game';
 import { advanceBot, scheduleBot } from '@/lib/bot';
 const reply = (data: unknown, status = 200) =>
   Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -92,6 +98,7 @@ export async function POST(req: Request) {
         deal(g);
         scheduleBot(g);
       }
+      assertDeckIntegrity(g);
       await db.insert(rooms).values({ code, state: JSON.stringify(g) });
       return reply({ token, game: view(g, 0, code) });
     }
@@ -154,6 +161,7 @@ export async function POST(req: Request) {
       }
       if (b.action !== 'poll') scheduleBot(g);
       if (b.action !== 'poll' || botMoved) {
+        assertDeckIntegrity(g);
         const changed = await db
           .update(rooms)
           .set({ state: JSON.stringify(g), version: row.version + 1 })

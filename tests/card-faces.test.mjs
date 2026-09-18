@@ -66,3 +66,19 @@ const droppedJoker = renderToStaticMarkup(
 assert.ok(droppedJoker.includes('/cards/jester-white.png'));
 assert.ok(droppedJoker.includes('New value:'));
 assert.ok(!droppedJoker.includes('wild-marker'));
+assert.ok(droppedJoker.includes('printed-value'));
+assert.ok(droppedJoker.includes('<span>Dropped joker</span>'));
+assert.ok(droppedJoker.includes('<strong>8♣</strong>'));
+const { DiscardStack } = await import('../components/game/discard-stack.tsx');
+const top = { id: 'top', r: 3, s: 0 },
+  underneath = { id: 'under', r: 4, s: 1 };
+const lifted = renderToStaticMarkup(
+  React.createElement(DiscardStack, { top, underneath, face: underneath }),
+);
+assert.equal((lifted.match(/class="discard-layer"/g) || []).length, 2);
+assert.ok(
+  lifted.includes('visibility:hidden') && lifted.includes('visibility:visible'),
+);
+console.log(
+  'PASS: fitted printed-joker label, pre-mounted discard underneath and hidden lifted card.',
+);

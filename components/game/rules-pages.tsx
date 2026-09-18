@@ -112,7 +112,8 @@ export function RulesPages({
               Choose one deck with one printed joker or two decks with two. A
               drop is blocked if its penalty would lose the match. Both players
               must press Next round or Play again to continue; the dealer is
-              automatically ready.
+              automatically ready. Discards never return to the closed deck. If
+              it runs out, drawing from it ends the round without points.
             </p>
           </>
         )}

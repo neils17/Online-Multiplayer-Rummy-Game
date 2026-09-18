@@ -15,7 +15,7 @@ import {
   useState,
   type CSSProperties,
 } from 'react';
-import { createPortal } from 'react-dom';
+import { createPortal, flushSync } from 'react-dom';
 import { useCardLayer } from '@/hooks/use-card-layer';
 import { useViewportStage, useHandFit } from '@/hooks/use-table-layout';
 import { preloadDeck } from '@/lib/card-preload';
@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { RulesPages } from '@/components/game/rules-pages';
+import { DiscardStack } from '@/components/game/discard-stack';
 import { FittedPanel } from '@/components/game/fitted-panel';
 import { RoundHands } from '@/components/game/round-hands';
 import { CardFace as Face } from '@/components/game/card-face';
@@ -49,6 +50,7 @@ import {
   rank,
   suit,
   dropRestriction,
+  droppedCard,
 } from '@/lib/game';
 type View = {
   expert: boolean;
@@ -188,7 +190,10 @@ export default function Home() {
       return;
     if (animate) {
       await animate();
-      apply();
+      flushSync(() => {
+        apply();
+        motionRef.current?.finishDiscard();
+      });
       return;
     }
     const event = previous ? opponentTransition(previous, next) : null;
@@ -267,7 +272,7 @@ export default function Home() {
           await flightMotion.fly(
             source.getBoundingClientRect(),
             target.getBoundingClientRect(),
-            card,
+            next.pile[0] || card,
             'Discarding your card',
             () => {
               if (next.status !== 'playing') apply();
@@ -524,7 +529,12 @@ export default function Home() {
         setError('Draw a card on your turn before discarding.');
         return false;
       }
-      return !!(await call('discard', id, seat, animate));
+      return !!(await call('discard', id, seat, async () => {
+        const card = latest.players[latest.me].hand.find((c) => c.id === id);
+        if (card)
+          motionRef.current?.prepareDiscard(droppedCard(card, latest.wild));
+        await animate();
+      }));
     },
     `${g?.code}/${g?.match}/${g?.round}/${g?.status}`,
     (id) => {
@@ -1045,7 +1055,11 @@ export default function Home() {
                       data-discard-card
                       className={`playing-card ${discardFace?.s && discardFace.s % 2 ? 'red' : ''} ${!discardFace ? 'empty-discard' : ''}`}
                     >
-                      {discardFace && <Face c={discardFace} />}
+                      <DiscardStack
+                        face={discardFace}
+                        top={g.pile[0]}
+                        underneath={g.underDiscard}
+                      />
                     </div>
                     <span>
                       {mayDiscard ? 'Drop card here' : 'Discard pile'}

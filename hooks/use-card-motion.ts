@@ -513,6 +513,14 @@ export function useCardMotion(
     end,
     click,
     getOrder: () => orderRef.current,
+    prepareDiscard: (card: Card) => {
+      const d = active.current;
+      if (d) {
+        d.face = card;
+        flushSync(() => setDrag({ ...d }));
+      }
+    },
+    finishDiscard: cleanup,
     sort: (next: string[]) =>
       update(
         orderRef.current.includes(INCOMING) && !next.includes(INCOMING)

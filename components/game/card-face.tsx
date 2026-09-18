@@ -17,16 +17,17 @@ export function CardFace({ c, w }: { c: Card; w?: number }) {
       />
       {c.naturalOnly && (
         <span
-          className="fixed-marker"
+          className={`fixed-marker ${c.printed ? 'printed-value' : ''}`}
           title="Dropped joker: face value only"
           aria-label={`Dropped joker. New value: ${rank(c.r)} ${suit[c.s]}`}
         >
           {c.printed ? (
             <>
-              Dropped
-              <br />
-              New value: {rank(c.r)}
-              {suit[c.s]}
+              <span>Dropped joker</span>
+              <strong>
+                {rank(c.r)}
+                {suit[c.s]}
+              </strong>
             </>
           ) : (
             'Was Joker'

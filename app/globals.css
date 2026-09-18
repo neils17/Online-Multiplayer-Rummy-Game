@@ -4403,3 +4403,87 @@ body {
   border-color: #d4b369 !important;
   background: #453d2066;
 }
+/* Give the name its own full-width row, independent of flex shrink. */
+.shell.casino .welcome form:not(.join) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+.shell.casino .welcome form:not(.join) input {
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  min-height: 44px;
+  font-size: 18px;
+  padding: 10px 14px;
+  margin: 0;
+  box-sizing: border-box;
+}
+.shell.casino .welcome form:not(.join) button {
+  width: 100%;
+  margin: 0;
+  min-height: 36px;
+  padding: 8px 12px;
+}
+.shell.casino .welcome h1 {
+  font-size: 36px;
+  margin: 6px 0;
+}
+.shell.casino .welcome > p {
+  margin: 6px 0;
+}
+.shell.casino .practice-option {
+  margin-top: 8px;
+  padding-top: 6px;
+}
+.playing-card {
+  container-type: inline-size;
+}
+.playing-card .fixed-marker {
+  box-sizing: border-box;
+  max-width: calc(100% - 8px);
+  overflow: hidden;
+  left: 4px;
+  bottom: 5px;
+  padding: 3px;
+  border-radius: 4px;
+  font: 700 8px/1.15 sans-serif;
+  text-align: center;
+}
+.playing-card .fixed-marker.printed-value {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  left: 7%;
+  bottom: 6%;
+  width: 86%;
+  max-width: 86%;
+  padding: 3px 1px;
+}
+.playing-card .fixed-marker.printed-value > span {
+  position: static;
+  display: block;
+  font: 600 10cqw/1.15 sans-serif;
+  color: inherit;
+  padding: 0;
+}
+.playing-card .fixed-marker.printed-value > strong {
+  position: static;
+  display: block;
+  font:
+    700 16cqw/1.1 Georgia,
+    serif;
+  color: inherit;
+}
+.discard-layer {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none;
+}
+.discard-layer .fixed-marker {
+  max-width: 86%;
+}

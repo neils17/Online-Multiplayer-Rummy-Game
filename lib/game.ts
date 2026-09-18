@@ -377,14 +377,12 @@ export function act(g: Game, i: number, a: string, cardId?: string) {
     if (a === 'open' && !g.pile.length)
       throw Error('The discard pile is empty.');
     if (a === 'draw' && !g.deck.length) {
-      g.deck = shuffle(g.pile.splice(0, g.pile.length - 1));
-      if (a === 'draw' && !g.deck.length) {
-        g.status = 'ended';
-        g.ready = g.players.map((p) => !!p.bot);
-        g.message = 'The deck is exhausted. No points this round.';
-        g.history.push({ round: g.round, points: [0, 0], message: g.message });
-        return;
-      }
+      g.status = 'ended';
+      g.ready = g.players.map((p) => !!p.bot);
+      g.message =
+        'The draw deck is exhausted. No points this round. Discards are never recycled.';
+      g.history.push({ round: g.round, points: [0, 0], message: g.message });
+      return;
     }
     const c = (a === 'draw' ? g.deck : g.pile).pop();
     if (!c) throw Error('No card available.');
@@ -445,4 +443,37 @@ export function dropRestriction(
     projected > (g.players[1 - i]?.score ?? 0)
     ? `You can’t drop: ${penalty} points would take your score to ${projected}, reaching the ${g.maxScore ?? 101}-point limit and losing the match. Keep playing this round.`
     : '';
+}
+
+// Each physical card belongs to exactly one live location; history is a snapshot.
+export function assertDeckIntegrity(g: Game) {
+  if (g.status === 'waiting') return;
+  const all = [
+    ...g.deck,
+    ...g.pile,
+    g.wild,
+    ...g.players.flatMap((p) => p.hand),
+  ];
+  const expected = new Set<string>();
+  for (let k = 0; k < (g.decks ?? 2); k++) {
+    for (let s = 0; s < 4; s++)
+      for (let r = 1; r <= 13; r++) expected.add(`${k}-${s}-${r}`);
+    expected.add(`j${k}`);
+  }
+  for (const c of all) {
+    if (!expected.delete(c.id))
+      throw Error('The deck could not be verified. Please start a new table.');
+    if (!c.id.startsWith('j')) {
+      const [, s, r] = c.id.split('-').map(Number);
+      if (c.r !== r || c.s !== s || c.printed)
+        throw Error(
+          'A physical card changed identity. Please start a new table.',
+        );
+    } else if (c.r !== 0 && !(c.printed && c.naturalOnly))
+      throw Error(
+        'A printed joker changed identity. Please start a new table.',
+      );
+  }
+  if (expected.size)
+    throw Error('A card is missing from the deck. Please start a new table.');
 }

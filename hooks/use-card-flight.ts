@@ -1,6 +1,7 @@
 'use client';
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useLayoutEffect } from 'react';
 import { flushSync } from 'react-dom';
+import { positionCard } from '@/lib/card-position';
 import type { Card } from '@/lib/game';
 export type Flight = {
   from: DOMRect;
@@ -12,6 +13,16 @@ export type Flight = {
 export function useCardFlight() {
   const [flight, setFlight] = useState<Flight | null>(null);
   const element = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (flight && element.current)
+      positionCard(
+        element.current,
+        flight.from.left,
+        flight.from.top,
+        flight.from.width,
+        flight.from.height,
+      );
+  }, [flight]);
   const alive = useRef(true);
   const cancel = useRef<(() => void) | null>(null);
   useEffect(() => {
@@ -82,13 +93,20 @@ export function useCardFlight() {
             velocity.every((v) => Math.abs(v) < 3);
           if (reduced || (elapsed > 0.35 && settled)) {
             if (element.current)
-              element.current.style.transform = `translate3d(${r.left - from.left}px,${r.top - from.top}px,0) scale(${r.width / width},${r.height / height})`;
+              positionCard(element.current, r.left, r.top, r.width, r.height);
             stop();
             return;
           }
           const tilt = Math.max(-3, Math.min(3, velocity[0] / 140));
           if (element.current)
-            element.current.style.transform = `translate3d(${position[0] - from.left}px,${position[1] - from.top}px,0) rotate(${tilt}deg) scale(${position[2] / width},${position[3] / height})`;
+            positionCard(
+              element.current,
+              position[0],
+              position[1],
+              position[2],
+              position[3],
+              tilt,
+            );
           raf = requestAnimationFrame(tick);
         };
         raf = requestAnimationFrame(tick);

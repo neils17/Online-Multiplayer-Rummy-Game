@@ -46,7 +46,7 @@ assert.equal(paths.size, 52);
 const joker = renderToStaticMarkup(
   React.createElement(CardFace, { c: { id: 'j', r: 0, s: 0 }, w: 8 }),
 );
-assert.ok(joker.includes('/cards/jester.webp'));
+assert.ok(joker.includes('/cards/jester-white.png'));
 assert.ok(joker.includes('wild-marker'));
 assert.ok(
   (await readFile('public/cards/LICENSE.txt', 'utf8')).includes(
@@ -56,3 +56,13 @@ assert.ok(
 console.log(
   'PASS: all 52 exact GitHub SVG faces, suit/rank mapping, native 5:7 aspect ratio, joker and CC0 license.',
 );
+
+const droppedJoker = renderToStaticMarkup(
+  React.createElement(CardFace, {
+    c: { id: 'd', r: 8, s: 2, naturalOnly: true, printed: true },
+    w: 8,
+  }),
+);
+assert.ok(droppedJoker.includes('/cards/jester-white.png'));
+assert.ok(droppedJoker.includes('New value:'));
+assert.ok(!droppedJoker.includes('wild-marker'));

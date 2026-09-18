@@ -3,163 +3,142 @@ import {
   act,
   deal,
   analyze,
-  meld,
+  gameOptions,
+  droppedCard,
+  isWild,
   naturalCompletion,
   winningDiscard,
-  isWild,
-  value,
-  droppedCard,
-  gameOptions,
 } from '../lib/game.ts';
-let serial = 0;
-const card = (r, s = 0, extra = {}) => ({ id: `t${serial++}`, r, s, ...extra });
-const run = (rs, s) => rs.map((r) => card(r, s));
-const set = (r, suits) => suits.map((s) => card(r, s));
-const sets = [
-  ...set(3, [0, 1, 2]),
-  ...set(5, [0, 1, 2]),
-  ...set(8, [0, 1, 2]),
-  ...set(11, [0, 1, 2, 3]),
-];
-const sequences = [
-  ...run([1, 2, 3], 0),
-  ...run([4, 5, 6], 1),
-  ...run([7, 8, 9], 2),
-  ...run([10, 11, 12, 13], 3),
-];
-const wild = card(5, 1);
-assert.equal(naturalCompletion(sets).kind, 'sets');
-assert.equal(naturalCompletion(sequences).kind, 'sequences');
-assert.equal(analyze(sets, 5).valid, true);
-assert.equal(analyze(sets, 5).penalty, 0);
-assert.ok(
-  meld(set(5, [0, 1, 2]), 5).includes(0),
-  'wild rank used as its printed value makes a natural set',
-);
-const printed = card(0);
-const withSubstitution = [...sets.slice(0, -1), printed];
-assert.equal(
-  naturalCompletion(withSubstitution),
-  null,
-  'a substituting printed joker earns no double bonus',
-);
-assert.equal(
-  naturalCompletion([...sequences.slice(0, -1), card(5, 0)]),
-  null,
-  'a wild-rank substitute earns no double bonus',
-);
-const mixed = [
-  ...run([1, 2, 3], 0),
-  ...run([4, 5, 6], 1),
-  ...set(8, [0, 1, 2]),
-  ...set(11, [0, 1, 2, 3]),
-];
-assert.equal(
-  naturalCompletion(mixed),
-  null,
-  'mixed natural melds are normal wins',
-);
-assert.equal(analyze(mixed, 12).valid, true);
-const locked = droppedCard(printed, wild);
-assert.equal(locked.r, 5);
-assert.equal(locked.s, 1);
-assert.equal(locked.id, printed.id);
-assert.ok(locked.naturalOnly);
-assert.ok(locked.printed);
-assert.equal(isWild(locked, 5), false);
-assert.equal(value(locked, 5), 5);
-assert.ok(meld([card(4, 1), locked, card(6, 1)], 5).includes(2));
-assert.deepEqual(
-  meld([card(8, 0), card(10, 0), locked], 5),
-  [],
-  'fixed printed joker cannot fill any arbitrary gap',
-);
-const wildFace = card(5, 3),
-  fixed = droppedCard(wildFace, wild);
-assert.equal(fixed.r, 5);
-assert.equal(fixed.s, 3);
-assert.equal(isWild(fixed, 5), false);
-const naturalSpare = card(2, 3);
-assert.equal(
-  winningDiscard([...sets, naturalSpare], 5, null).id,
-  naturalSpare.id,
-);
-assert.notEqual(
-  winningDiscard([...sets, naturalSpare], 5, naturalSpare.id)?.id,
-  naturalSpare.id,
-);
-const game = () => {
+let id = 0;
+const cards = (ranks, s) => ranks.map((r) => ({ id: `test${id++}`, r, s }));
+const make = (decks = 2) => {
   const g = {
+    ...gameOptions(false, 101, decks),
     players: [
-      { name: 'A', hand: [], score: 0, draws: 0 },
-      { name: 'B', hand: [], score: 0, draws: 0 },
+      { name: 'A', token: 'a', hand: [], score: 0, draws: 0 },
+      { name: 'B', token: 'b', hand: [], score: 0, draws: 0 },
     ],
     history: [],
     round: 0,
-    expert: true,
-    maxScore: 101,
-    match: 1,
   };
   deal(g);
   return g;
 };
-const loser = Array.from({ length: 13 }, (_, i) => card(13, 0));
-for (const hand of [sets, sequences, mixed]) {
-  const g = game();
-  g.wild = wild;
-  g.players[0].hand = [...hand, naturalSpare];
-  g.players[1].hand = loser;
-  g.phase = 'discard';
-  act(g, 0, 'declare');
-  const bonus = hand !== mixed;
-  assert.equal(g.status, 'ended');
-  assert.equal(g.players[1].score, bonus ? 160 : 80);
-  assert.equal(g.history[0].multiplier, bonus ? 2 : 1);
-  assert.equal(g.matchOver, bonus);
-  if (bonus) {
-    assert.equal(g.winner, 0);
-    assert.throws(() => act(g, 0, 'next'));
-    act(g, 0, 'restart');
-    assert.deepEqual(
-      g.players.map((p) => p.score),
-      [0, 0],
-    );
-    assert.equal(g.round, 1);
-    assert.equal(g.match, 2);
-    assert.equal(g.history.length, 0);
-    assert.equal(g.expert, true);
-    assert.equal(g.maxScore, 101);
-    assert.equal(g.matchOver, false);
-  }
+for (const decks of [1, 2]) {
+  const g = make(decks),
+    all = [...g.deck, ...g.pile, g.wild, ...g.players.flatMap((p) => p.hand)];
+  assert.equal(all.length, 53 * decks);
+  assert.equal(new Set(all.map((c) => c.id)).size, all.length);
+  assert.equal(all.filter((c) => c.r === 0).length, decks);
 }
-const g = game();
-g.wild = wild;
-g.players[0].hand = [...sets, printed];
-g.phase = 'discard';
-act(g, 0, 'discard', printed.id);
-assert.ok(g.pile.at(-1).naturalOnly);
-act(g, 1, 'open');
-const picked = g.players[1].hand.at(-1);
-assert.equal(picked.r, wild.r);
-assert.equal(picked.s, wild.s);
-assert.equal(isWild(picked, wild.r), false);
-assert.throws(() => act(g, 1, 'discard', picked.id));
-const other = g.players[1].hand.find((c) => c.id !== picked.id);
-act(g, 1, 'discard', other.id);
-const round = game();
-round.players[0].score = 81;
-act(round, 0, 'drop');
-assert.equal(round.matchOver, true);
-assert.equal(round.players[0].score, 101);
-assert.equal(round.winner, 1);
-for (const maxScore of [101, 102, 126, 150, 151])
-  assert.equal(gameOptions(true, maxScore).maxScore, maxScore);
-for (const maxScore of [100, 152, 101.5, NaN])
-  assert.throws(() => gameOptions(false, maxScore));
-assert.deepEqual(gameOptions(undefined, undefined), {
-  expert: false,
-  maxScore: 101,
-});
+assert.throws(() => gameOptions(false, 101, 3));
+const noPure = Array.from({ length: 13 }, (_, i) => ({
+  id: `low${i}`,
+  r: 2,
+  s: i % 4,
+}));
+assert.equal(
+  analyze(noPure, 9).penalty,
+  80,
+  'full 80 even when raw values total less',
+);
+const onePure = [
+  ...cards([1, 2, 3], 0),
+  ...Array.from({ length: 10 }, (_, i) => ({
+    id: `repeat${i}`,
+    r: 8,
+    s: i % 4,
+  })),
+];
+assert.equal(analyze(onePure, 9).penalty, 80, 'one pure alone exempts nothing');
+const qualified = [
+  ...cards([1, 2, 3], 0),
+  ...cards([4, 0, 6], 1),
+  ...cards([8], 0),
+  ...cards([8], 1),
+  ...cards([8], 2),
+  ...cards([10], 0),
+  ...cards([12], 1),
+  ...cards([13], 2),
+  ...cards([7], 3),
+];
+assert.equal(
+  analyze(qualified, 9).penalty,
+  37,
+  'pure plus separate impure exempts sequences and sets',
+);
+const sets = [
+  ...cards([2, 5, 8], 0),
+  ...cards([2, 5, 8], 1),
+  ...cards([2, 5, 8], 2),
+  ...cards([2, 5, 8, 11], 3),
+];
+assert.equal(analyze(sets, 9).penalty, 80);
+assert.equal(analyze(sets, 9).valid, false);
+const natural = [
+  ...cards([1, 2, 3], 0),
+  ...cards([4, 5, 6], 1),
+  ...cards([7, 8, 9], 2),
+  ...cards([10, 11, 12, 13], 3),
+];
+assert.equal(naturalCompletion(natural).kind, 'sequences');
+const bonus = make();
+bonus.wild = { id: 'w', r: 9, s: 0 };
+bonus.players[0].hand = [...natural, { id: 'spare', r: 2, s: 3 }];
+bonus.players[1].hand = noPure;
+bonus.phase = 'discard';
+bonus.picked = 'spare';
+assert.equal(winningDiscard(bonus.players[0].hand, 9, 'spare').id, 'spare');
+act(bonus, 0, 'declare');
+assert.equal(bonus.players[1].score, 160);
+assert.equal(bonus.history[0].discard.id, 'spare');
+assert.equal(bonus.players[0].hand.length, 13);
+assert.equal(bonus.players[1].hand.length, 13);
+act(bonus, 0, 'restart');
+assert.equal(bonus.status, 'ended');
+assert.deepEqual(bonus.ready, [true, false]);
+act(bonus, 1, 'restart');
+assert.equal(bonus.match, 2);
+assert.equal(bonus.round, 1);
+assert.deepEqual(
+  bonus.players.map((p) => p.score),
+  [0, 0],
+);
+const dropped = make();
+dropped.players[0].score = 81;
+assert.throws(() => act(dropped, 0, 'drop'), /can’t drop.*101/);
+assert.equal(dropped.status, 'playing');
+dropped.players[0].score = 80;
+act(dropped, 0, 'drop');
+assert.equal(dropped.players[0].score, 100);
+act(dropped, 0, 'next');
+assert.equal(dropped.status, 'ended');
+act(dropped, 1, 'next');
+assert.equal(dropped.round, 2);
+const later = make();
+later.players[0].score = 61;
+later.players[0].draws = 1;
+assert.throws(() => act(later, 0, 'drop'), /40 points/);
+for (const card of [
+  { id: 'j', r: 0, s: 0 },
+  { id: 'w', r: 7, s: 2 },
+]) {
+  const g = make();
+  g.wild = { id: 'indicator', r: 7, s: 1 };
+  g.pile = [card];
+  act(g, 0, 'open');
+  assert.ok(isWild(g.players[0].hand.at(-1), 7));
+  act(g, 0, 'discard', card.id);
+  assert.deepEqual(g.pile.at(-1), droppedCard(card, g.wild));
+  act(g, 1, 'open');
+  assert.equal(isWild(g.players[1].hand.at(-1), 7), false);
+  act(g, 1, 'discard', card.id);
+}
+const bot = make();
+bot.players[1].bot = true;
+act(bot, 0, 'drop');
+act(bot, 0, 'next');
+assert.equal(bot.round, 2);
 console.log(
-  'PASS: natural sets/sequences and wild-rank faces, no false double bonus, fixed printed/wild discards, pickup restrictions, 160-point doubles, exact match limits, rematch resets, settings validation.',
+  'PASS: 1/2 decks, exact 80-point sequence gate, meld exemptions, natural double bonus, winning discard, loss-preventing drops, immediate rediscard, both-player readiness and bot readiness.',
 );

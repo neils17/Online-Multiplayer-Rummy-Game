@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {
   arrangeHand,
+  stableArrangement,
   describeGroup,
   moveToGroup,
   splitGroups,
@@ -34,7 +35,7 @@ assert.equal(
 );
 assert.equal(arranged.at(-1)[0].id, fourteen.at(-1).id);
 const restricted = arrangeHand(fourteen, 10, fourteen.at(-1).id);
-assert.notEqual(restricted.at(-1)[0].id, fourteen.at(-1).id);
+assert.equal(restricted.at(-1)[0].id, fourteen.at(-1).id);
 const high = arrangeHand(cards([1, 13, 12], 1), 8);
 assert.deepEqual(
   high[0].map((c) => c.r),
@@ -136,4 +137,51 @@ assert.deepEqual(
 );
 console.log(
   'PASS: newly emptied groups disappear while intentional empty drop targets survive.',
+);
+
+// Duplicate copies must stay with their current groups, and repeated Arrange is a no-op.
+const copies = [
+  { id: 'a3', r: 3, s: 0 },
+  { id: 'a4', r: 4, s: 0 },
+  { id: 'a5', r: 5, s: 0 },
+  { id: 'b3', r: 3, s: 0 },
+  { id: 'b4', r: 4, s: 0 },
+  { id: 'b5', r: 5, s: 0 },
+];
+const original = [
+  GROUP + 'left',
+  'a3',
+  'a4',
+  'a5',
+  GROUP + 'right',
+  'b3',
+  'b4',
+  'b5',
+];
+const swapped = [
+  ['b3', 'a4', 'a5'],
+  ['a3', 'b4', 'b5'],
+];
+assert.deepEqual(
+  stableArrangement(swapped, copies, original, () => {
+    throw Error('Do not replace existing groups');
+  }),
+  original,
+);
+const first = arrangeHand(trap, 10).map((group) => group.map((c) => c.id));
+let sequence = 0;
+const stableOrder = stableArrangement(
+  first,
+  trap,
+  [GROUP + 'raw', ...trap.map((c) => c.id)],
+  () => GROUP + `stable${sequence++}`,
+);
+assert.deepEqual(
+  stableArrangement(first, trap, stableOrder, () => {
+    throw Error('Repeated Arrange should not create groups');
+  }),
+  stableOrder,
+);
+console.log(
+  'PASS: duplicate copies stay in their groups and repeated Arrange preserves exact order/group identities.',
 );

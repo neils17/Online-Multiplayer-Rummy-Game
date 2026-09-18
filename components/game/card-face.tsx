@@ -1,14 +1,14 @@
-import { isWild, rank, type Card } from '@/lib/game';
+import { isWild, rank, suit, type Card } from '@/lib/game';
 export function cardAsset(c: Card) {
-  return c.r
+  return c.r && !c.printed
     ? `/cards/${['S', 'H', 'C', 'D'][c.s]}-${rank(c.r)}.svg`
-    : '/cards/jester.webp';
+    : '/cards/jester-white.png';
 }
 export function CardFace({ c, w }: { c: Card; w?: number }) {
   return (
     <>
       <img
-        className={`deck-face ${c.r === 0 ? 'joker-art' : ''}`}
+        className={`deck-face ${c.r === 0 || c.printed ? 'joker-art' : ''}`}
         src={cardAsset(c)}
         alt=""
         draggable={false}
@@ -19,9 +19,18 @@ export function CardFace({ c, w }: { c: Card; w?: number }) {
         <span
           className="fixed-marker"
           title="Dropped joker: face value only"
-          aria-label="Face value only"
+          aria-label={`Dropped joker. New value: ${rank(c.r)} ${suit[c.s]}`}
         >
-          Was Joker
+          {c.printed ? (
+            <>
+              Dropped
+              <br />
+              New value: {rank(c.r)}
+              {suit[c.s]}
+            </>
+          ) : (
+            'Was Joker'
+          )}
         </span>
       )}
       {w !== undefined && isWild(c, w) && (

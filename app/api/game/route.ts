@@ -11,12 +11,14 @@ function view(g: Game, i: number, code: string, revision = 0) {
     revision,
     ...g,
     expert: g.expert ?? false,
+    decks: g.decks ?? 2,
+    ready: g.ready ?? g.players.map((p) => g.status === 'ended' && !!p.bot),
     maxScore: g.maxScore ?? 101,
     match: g.match ?? 1,
-    message: g.message.replaceAll('Mehfil Bot', 'Rummy Bot'),
+    message: g.message.replace(/\b\w+ Bot\b/g, 'Rummy Bot'),
     history: g.history.map((h) => ({
       ...h,
-      message: h.message.replaceAll('Mehfil Bot', 'Rummy Bot'),
+      message: h.message.replace(/\b\w+ Bot\b/g, 'Rummy Bot'),
     })),
     deck: undefined,
     botAt: undefined,
@@ -44,6 +46,9 @@ export async function POST(req: Request) {
       cardId?: string;
       expert?: boolean;
       maxScore?: number;
+      decks?: 1 | 2;
+      round?: number;
+      match?: number;
     };
     const db = getDb();
     const name =
@@ -57,7 +62,7 @@ export async function POST(req: Request) {
         .slice(0, 8)
         .toUpperCase();
       const token = crypto.randomUUID();
-      const options = gameOptions(b.expert, b.maxScore);
+      const options = gameOptions(b.expert, b.maxScore, b.decks);
       const g: Game = {
         ...options,
         match: 1,
@@ -91,82 +96,101 @@ export async function POST(req: Request) {
       return reply({ token, game: view(g, 0, code) });
     }
     const code = String(b.code || '').toUpperCase();
-    const row = await db.select().from(rooms).where(eq(rooms.code, code)).get();
-    if (!row)
-      return reply({ error: 'Table not found. Check your room code.' }, 404);
-    const g: Game = JSON.parse(row.state);
-    g.expert ??= false;
-    g.maxScore ??= 101;
-    g.match ??= 1;
-    if (g.status === 'ended' && g.players.some((p) => p.score >= g.maxScore!)) {
-      g.matchOver = true;
-      g.winner =
-        g.players[0].score === g.players[1].score
-          ? null
-          : g.players[0].score < g.players[1].score
-            ? 0
-            : 1;
-    }
-    g.players.forEach((p) => {
-      if (p.bot) p.name = 'Rummy Bot';
-    });
-    let i = g.players.findIndex((p) => p.token === b.token);
-    let token = b.token;
-    let botMoved = false;
-    if (b.action === 'join' && i < 0) {
-      if (g.players.length === 2)
-        return reply({ error: 'This table already has two players.' }, 409);
-      token = crypto.randomUUID();
-      g.players.push({ name, token, hand: [], score: 0, draws: 0 });
-      i = 1;
-      deal(g);
-    } else {
-      if (i < 0)
-        return reply(
-          {
-            error:
-              'Your seat could not be verified. Rejoin with your saved browser.',
-          },
-          403,
-        );
-      if (b.action !== 'poll') act(g, i, b.action, b.cardId);
-      else botMoved = advanceBot(g);
-    }
-    if (b.action !== 'poll') scheduleBot(g);
-    if (b.action !== 'poll' || botMoved) {
-      const changed = await db
-        .update(rooms)
-        .set({ state: JSON.stringify(g), version: row.version + 1 })
-        .where(and(eq(rooms.code, code), eq(rooms.version, row.version)))
-        .returning({ code: rooms.code });
-      if (!changed.length) {
-        if (b.action === 'poll') {
-          const latest = await db
-            .select()
-            .from(rooms)
-            .where(eq(rooms.code, code))
-            .get();
-          if (latest)
-            return reply({
-              token,
-              game: view(JSON.parse(latest.state), i, code, latest.version),
-            });
-        }
-        return reply(
-          { error: 'The table just changed. Please try again.' },
-          409,
-        );
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const row = await db
+        .select()
+        .from(rooms)
+        .where(eq(rooms.code, code))
+        .get();
+      if (!row)
+        return reply({ error: 'Table not found. Check your room code.' }, 404);
+      const g: Game = JSON.parse(row.state);
+      g.expert ??= false;
+      g.decks ??= 2;
+      g.maxScore ??= 101;
+      g.match ??= 1;
+      if (
+        g.status === 'ended' &&
+        g.players.some((p) => p.score >= g.maxScore!)
+      ) {
+        g.matchOver = true;
+        g.winner =
+          g.players[0].score === g.players[1].score
+            ? null
+            : g.players[0].score < g.players[1].score
+              ? 0
+              : 1;
       }
+      g.players.forEach((p) => {
+        if (p.bot) p.name = 'Rummy Bot';
+      });
+      let i = g.players.findIndex((p) => p.token === b.token);
+      let token = b.token;
+      let botMoved = false;
+      if (b.action === 'join' && i < 0) {
+        if (g.players.length === 2)
+          return reply({ error: 'This table already has two players.' }, 409);
+        token = crypto.randomUUID();
+        g.players.push({ name, token, hand: [], score: 0, draws: 0 });
+        i = 1;
+        deal(g);
+      } else {
+        if (i < 0)
+          return reply(
+            {
+              error:
+                'Your seat could not be verified. Rejoin with your saved browser.',
+            },
+            403,
+          );
+        if (
+          (b.action === 'next' || b.action === 'restart') &&
+          ((b.match !== undefined && b.match !== g.match) ||
+            (b.round !== undefined && b.round !== g.round))
+        )
+          return reply({ token, game: view(g, i, code, row.version) });
+        if (b.action !== 'poll') act(g, i, b.action, b.cardId);
+        else botMoved = advanceBot(g);
+      }
+      if (b.action !== 'poll') scheduleBot(g);
+      if (b.action !== 'poll' || botMoved) {
+        const changed = await db
+          .update(rooms)
+          .set({ state: JSON.stringify(g), version: row.version + 1 })
+          .where(and(eq(rooms.code, code), eq(rooms.version, row.version)))
+          .returning({ code: rooms.code });
+        if (!changed.length) {
+          if ((b.action === 'next' || b.action === 'restart') && attempt < 3)
+            continue;
+          if (b.action === 'poll') {
+            const latest = await db
+              .select()
+              .from(rooms)
+              .where(eq(rooms.code, code))
+              .get();
+            if (latest)
+              return reply({
+                token,
+                game: view(JSON.parse(latest.state), i, code, latest.version),
+              });
+          }
+          return reply(
+            { error: 'The table just changed. Please try again.' },
+            409,
+          );
+        }
+      }
+      return reply({
+        token,
+        game: view(
+          g,
+          i,
+          code,
+          row.version + (b.action !== 'poll' || botMoved ? 1 : 0),
+        ),
+      });
     }
-    return reply({
-      token,
-      game: view(
-        g,
-        i,
-        code,
-        row.version + (b.action !== 'poll' || botMoved ? 1 : 0),
-      ),
-    });
+    return reply({ error: 'The table is busy. Please try again.' }, 409);
   } catch (e) {
     return reply(
       {

@@ -55,8 +55,8 @@ assert.equal(invalid.history.length, 1);
 const restricted = make([...ready, spare]);
 restricted.picked = spare.id;
 act(restricted, 0, 'declare');
-assert.equal(restricted.players[0].score, 87);
-assert.notEqual(restricted.pile.at(-1).id, spare.id);
+assert.equal(restricted.players[0].score, 7);
+assert.equal(restricted.pile.at(-1).id, spare.id);
 const short = make(ready);
 assert.throws(() => act(short, 0, 'declare'), /14 cards/);
 assert.equal(short.status, 'playing');
@@ -67,5 +67,5 @@ const beforeDraw = make(ready);
 beforeDraw.phase = 'draw';
 assert.throws(() => act(beforeDraw, 0, 'declare'), /14 cards/);
 console.log(
-  'PASS: unselected declaration, selected card ignored, automatic winning spare, invalid penalty, protected open draw, 14-card and turn enforcement.',
+  'PASS: unselected declaration, selected card ignored, automatic winning spare, invalid penalty, open draw can be the winning discard, 14-card and turn enforcement.',
 );

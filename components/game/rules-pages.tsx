@@ -31,8 +31,8 @@ export function RulesPages({
             <h3>A winning hand</h3>
             <p>
               Arrange 13 cards into sets and sequences of at least three cards.
-              You normally need two sequences, including one pure sequence. Aces
-              can be low or high, but cannot wrap around.
+              You need two sequences, including one pure sequence. Aces can be
+              low or high, but cannot wrap around.
             </p>
             <p>
               Sets use 3–4 equal ranks in different suits. A pure sequence uses
@@ -45,8 +45,8 @@ export function RulesPages({
               declaration costs 80 points.
             </p>
             <p>
-              Arrange and groups are available in standard mode. Expert mode
-              gives you one hand to reorder yourself.
+              Create and edit groups in either mode. Expert mode removes only
+              the automatic Arrange button.
             </p>
           </>
         )}
@@ -73,11 +73,12 @@ export function RulesPages({
               A wild-rank card keeps its face. A discarded printed joker takes
               the exact rank and suit of the displayed wild indicator. Either
               player may pick it up later, but can only use its face value.
+              Printed jokers keep their picture and display their new value.
             </p>
             <p>
-              You cannot immediately return a card taken from the discard pile.
-              A card drawn from the closed deck is yours as soon as it is
-              revealed; you may drag it straight to the discard pile.
+              You may immediately discard a card taken from either pile. A card
+              drawn from the closed deck is yours as soon as it is revealed; you
+              may drag it straight to the discard pile.
             </p>
           </>
         )}
@@ -89,15 +90,17 @@ export function RulesPages({
               capped at 80. A, J, Q and K count as 10; wild jokers count as 0.
             </p>
             <p>
-              Without a pure sequence, all cards count. Without two sequences,
-              only pure sequences are exempt.
+              Without a pure sequence AND a separate second sequence (pure or
+              with jokers), the penalty is always 80. Once both are present, all
+              valid melds are exempt and only unmatched cards count, capped at
+              80.
             </p>
             <h3>Natural hand bonus · 2×</h3>
             <p>
-              A hand made entirely of natural sets or entirely of natural
-              sequences doubles the opponent’s normal penalty, after the
-              80-point cap (up to 160). An all-natural sets hand is a special
-              valid win without sequences.
+              A hand made entirely of natural sequences doubles the opponent’s
+              normal penalty, after the 80-point cap (up to 160). The
+              pure-sequence and second-sequence requirements apply to every
+              hand.
             </p>
             <h3>The match</h3>
             <p>
@@ -106,8 +109,10 @@ export function RulesPages({
               lower total wins.
             </p>
             <p>
-              Two decks plus two printed jokers. Play for points, with no
-              stakes.
+              Choose one deck with one printed joker or two decks with two. A
+              drop is blocked if its penalty would lose the match. Both players
+              must press Next round or Play again to continue; the dealer is
+              automatically ready.
             </p>
           </>
         )}

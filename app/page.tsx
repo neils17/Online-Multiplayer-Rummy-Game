@@ -16,6 +16,7 @@ import {
   type CSSProperties,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { useCardLayer } from '@/hooks/use-card-layer';
 import { useViewportStage, useHandFit } from '@/hooks/use-table-layout';
 import { preloadDeck } from '@/lib/card-preload';
 import {
@@ -26,6 +27,7 @@ import {
 } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { RulesPages } from '@/components/game/rules-pages';
+import { FittedPanel } from '@/components/game/fitted-panel';
 import { RoundHands } from '@/components/game/round-hands';
 import { CardFace as Face } from '@/components/game/card-face';
 import { useCardFlight } from '@/hooks/use-card-flight';
@@ -34,15 +36,24 @@ import {
   describeGroup,
   splitGroups,
   removeGroup,
+  stableArrangement,
   pruneEmptiedGroups,
   isGroup,
   GROUP,
 } from '@/lib/arrange';
 import ArrangeWorker from '@/lib/arrange.worker?worker';
 import { useCardMotion, INCOMING } from '@/hooks/use-card-motion';
-import { type Card, type RoundResult, rank, suit } from '@/lib/game';
+import {
+  type Card,
+  type RoundResult,
+  rank,
+  suit,
+  dropRestriction,
+} from '@/lib/game';
 type View = {
   expert: boolean;
+  decks: 1 | 2;
+  ready: boolean[];
   maxScore: number;
   match: number;
   matchOver?: boolean;
@@ -73,11 +84,13 @@ type View = {
 type Seat = { code: string; token: string };
 export default function Home() {
   useViewportStage();
+  const cardLayer = useCardLayer();
   useEffect(() => {
     void preloadDeck();
   }, []);
   const [name, setName] = useState('');
   const [expert, setExpert] = useState(false);
+  const [decks, setDecks] = useState<1 | 2>(2);
   const [maxScore, setMaxScore] = useState(101);
   const validOptions =
     Number.isInteger(maxScore) && maxScore >= 101 && maxScore <= 151;
@@ -317,18 +330,10 @@ export default function Home() {
   }
   useEffect(() => {
     try {
-      const saved =
-        localStorage.getItem('rummy-seat') ||
-        localStorage.getItem('mehfil-seat');
+      const saved = localStorage.getItem('rummy-seat');
       if (saved) localStorage.setItem('rummy-seat', saved);
-      localStorage.removeItem('mehfil-seat');
       if (saved) setSeat(JSON.parse(saved));
-      setName(
-        localStorage.getItem('rummy-name') ||
-          localStorage.getItem('mehfil-name') ||
-          '',
-      );
-      localStorage.removeItem('mehfil-name');
+      setName(localStorage.getItem('rummy-name') || '');
       setCode(new URLSearchParams(location.search).get('room') || '');
     } catch {}
   }, []);
@@ -343,6 +348,8 @@ export default function Home() {
       !['create', 'join', 'practice', 'poll'].includes(action)
     )
       return false;
+    if (['create', 'join', 'practice'].includes(action))
+      (document.activeElement as HTMLElement | null)?.blur();
     if (action !== 'poll') {
       requestEpoch.current++;
       inFlight.current = true;
@@ -358,7 +365,10 @@ export default function Home() {
           action,
           cardId,
           expert,
+          decks,
           maxScore,
+          round: gRef.current?.round,
+          match: gRef.current?.match,
           name,
           code: current?.code || code,
           token: current?.token,
@@ -523,8 +533,7 @@ export default function Home() {
         latest?.status === 'playing' &&
         latest.turn === latest.me &&
         latest.phase === 'discard' &&
-        latest.players[latest.me].hand.length === 14 &&
-        latest.picked !== id
+        latest.players[latest.me].hand.length === 14
       )
         void call('discard', id);
     },
@@ -559,7 +568,7 @@ export default function Home() {
   const handFit = useHandFit(
     motion.hand,
     handGroups.map((group) => group.cards.length),
-    !!g?.expert,
+    false,
   );
   const groupInfo = handGroups.map((group) =>
     describeGroup(
@@ -606,7 +615,11 @@ export default function Home() {
             reject(new Error('Arrange could not finish. Please try again.'));
           };
           worker.postMessage({
-            hand: currentHand,
+            hand: motion
+              .getOrder()
+              .filter((id) => !isGroup(id))
+              .map((id) => currentHand.find((c) => c.id === id))
+              .filter(Boolean),
             wild: current.wild.r,
             picked: current.picked || null,
           });
@@ -625,10 +638,12 @@ export default function Home() {
         )
           continue;
         motion.sort(
-          groups.flatMap((ids) => [
-            GROUP + String(++groupCounter.current),
-            ...ids,
-          ]),
+          stableArrangement(
+            groups,
+            latest.players[latest.me].hand,
+            motion.getOrder(),
+            () => GROUP + String(++groupCounter.current),
+          ),
         );
         break;
       }
@@ -662,20 +677,36 @@ export default function Home() {
   }
   return (
     <main
-      className={`shell casino ${g ? 'game-shell' : ''} ${g?.expert ? 'expert-mode' : ''}`}
+      className={`shell casino ${g ? 'game-shell' : ''}`}
       onPointerMove={motion.move}
       onPointerUp={(e) => void motion.end(e)}
       onPointerCancel={(e) => void motion.end(e, true)}
-      onClickCapture={motion.click}
+      onClickCapture={(e) => {
+        motion.click(e);
+        const button = (e.target as HTMLElement).closest('button');
+        if (
+          !e.defaultPrevented &&
+          button &&
+          !button.disabled &&
+          !button.matches('.hand-card,.pile-button') &&
+          !matchMedia('(prefers-reduced-motion: reduce)').matches
+        ) {
+          button.animate(
+            [{ scale: '1' }, { scale: '.96', offset: 0.4 }, { scale: '1' }],
+            { duration: 180, easing: 'ease-out' },
+          );
+        }
+      }}
     >
       {flightMotion.flight &&
+        cardLayer &&
         createPortal(
           <div
             ref={flightMotion.element}
             className={`playing-card flight-card ${flightMotion.flight.card?.s && flightMotion.flight.card.s % 2 ? 'red' : ''} ${!flightMotion.flight.card ? 'card-back' : ''}`}
             style={{
-              left: flightMotion.flight.from.left,
-              top: flightMotion.flight.from.top,
+              left: 0,
+              top: 0,
               width: flightMotion.flight.width,
               height: flightMotion.flight.height,
               transform: `scale(${flightMotion.flight.from.width / flightMotion.flight.width},${flightMotion.flight.from.height / flightMotion.flight.height})`,
@@ -688,16 +719,17 @@ export default function Home() {
               <b>✦</b>
             )}
           </div>,
-          document.body,
+          cardLayer,
         )}
       {drag &&
+        cardLayer &&
         createPortal(
           <div
             ref={motion.ghost}
             className={`playing-card drag-ghost ${drag.face?.s && drag.face.s % 2 ? 'red' : ''} ${drag.source === 'draw' && !drag.face ? 'card-back deck' : ''}`}
             style={{
-              left: drag.origin.left,
-              top: drag.origin.top,
+              left: 0,
+              top: 0,
               width: drag.origin.width,
               height: drag.origin.height,
             }}
@@ -705,7 +737,7 @@ export default function Home() {
           >
             {drag.face ? <Face c={drag.face} w={g?.wild.r} /> : <b>♠</b>}
           </div>,
-          document.body,
+          cardLayer,
         )}
       <header>
         <div className="brand">
@@ -736,13 +768,24 @@ export default function Home() {
                 <div className="expert-setting">
                   <div>
                     <label htmlFor="expert-mode">Expert mode</label>
-                    <small>One row of cards. Arrange your hand yourself.</small>
+                    <small>Create groups and arrange cards yourself.</small>
                   </div>
                   <Switch
                     id="expert-mode"
                     checked={expert}
                     onCheckedChange={setExpert}
                   />
+                </div>
+                <div className="deck-setting">
+                  <label htmlFor="deck-count">Decks</label>
+                  <select
+                    id="deck-count"
+                    value={decks}
+                    onChange={(e) => setDecks(Number(e.target.value) as 1 | 2)}
+                  >
+                    <option value={1}>1 deck · 1 printed joker</option>
+                    <option value={2}>2 decks · 2 printed jokers</option>
+                  </select>
                 </div>
                 <div className="score-setting">
                   <label htmlFor="max-score">
@@ -884,7 +927,7 @@ export default function Home() {
                 <div className="room-code">{g.code}</div>
                 <p>
                   {g.expert ? 'Expert mode' : 'Standard mode'} · {g.maxScore}
-                  -point limit
+                  -point limit · {g.decks} {g.decks === 1 ? 'deck' : 'decks'}
                 </p>
                 <small>
                   Keep this browser open. Play starts when they join.
@@ -1024,25 +1067,26 @@ export default function Home() {
                       <strong>{g.players[g.me].name}</strong>
                       <span>You · {hand.length} cards</span>
                     </div>
-                    {!g.expert && (
-                      <div className="hand-tools">
-                        <button
-                          className="quiet"
-                          disabled={
-                            !hand.length ||
-                            handGroups.length >= hand.length + 1 ||
-                            (!!drag && !drag.settling) ||
-                            arranging
-                          }
-                          onClick={() => {
-                            const id = GROUP + String(++groupCounter.current);
-                            motion.sort([...order, id]);
-                          }}
-                        >
-                          + Group
-                        </button>
+                    <div className="hand-tools">
+                      <button
+                        className="quiet"
+                        disabled={
+                          !hand.length ||
+                          handGroups.length >= hand.length + 1 ||
+                          (!!drag && !drag.settling) ||
+                          arranging
+                        }
+                        onClick={() => {
+                          const id = GROUP + String(++groupCounter.current);
+                          motion.sort([...order, id]);
+                        }}
+                      >
+                        + Group
+                      </button>
+                      {!g.expert && (
                         <button
                           className="arrange-button"
+                          aria-busy={arranging}
                           disabled={
                             !hand.length ||
                             (!!drag && !drag.settling) ||
@@ -1050,10 +1094,10 @@ export default function Home() {
                           }
                           onClick={arrange}
                         >
-                          {arranging ? 'Arranging…' : '✦ Arrange'}
+                          ✦ Arrange
                         </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                   <div
                     ref={motion.hand}
@@ -1074,45 +1118,43 @@ export default function Home() {
                           data-hand-group={group.id}
                           style={{
                             width: Math.max(
-                              g.expert ? 0 : 64,
+                              64,
                               handFit.card +
                                 Math.max(0, group.cards.length - 1) *
                                   handFit.step +
-                                (g.expert ? 0 : 14),
+                                14,
                             ),
                           }}
-                          className={`hand-group ${g.expert ? '' : `group-${info.kind}`} ${group.cards.length > 7 ? 'group-scroll' : ''}`}
+                          className={`hand-group ${`group-${info.kind}`} ${group.cards.length > 7 ? 'group-scroll' : ''}`}
                         >
-                          {!g.expert && (
-                            <div className="group-label">
-                              <span title={info.label}>
-                                {info.valid ? '✓ ' : ''}
-                                {info.label}
-                              </span>
-                              <div className="group-label-tools">
-                                <small>
-                                  {
-                                    group.cards.filter((c) => c.id !== INCOMING)
-                                      .length
-                                  }
-                                </small>
-                                <button
-                                  className="remove-group"
-                                  aria-label={`Remove ${info.label.toLowerCase()} group; keep its cards`}
-                                  disabled={
-                                    handGroups.length < 2 ||
-                                    (!!drag && !drag.settling) ||
-                                    arranging
-                                  }
-                                  onClick={() =>
-                                    motion.sort(removeGroup(order, group.id))
-                                  }
-                                >
-                                  ×
-                                </button>
-                              </div>
+                          <div className="group-label">
+                            <span title={info.label}>
+                              {info.valid ? '✓ ' : ''}
+                              {info.label}
+                            </span>
+                            <div className="group-label-tools">
+                              <small>
+                                {
+                                  group.cards.filter((c) => c.id !== INCOMING)
+                                    .length
+                                }
+                              </small>
+                              <button
+                                className="remove-group"
+                                aria-label={`Remove ${info.label.toLowerCase()} group; keep its cards`}
+                                disabled={
+                                  handGroups.length < 2 ||
+                                  (!!drag && !drag.settling) ||
+                                  arranging
+                                }
+                                onClick={() =>
+                                  motion.sort(removeGroup(order, group.id))
+                                }
+                              >
+                                ×
+                              </button>
                             </div>
-                          )}
+                          </div>
                           <div className="group-cards">
                             {group.cards.map((c) => (
                               <button
@@ -1138,24 +1180,22 @@ export default function Home() {
                       );
                     })}
                   </div>
-                  {!g.expert && (
-                    <div className="group-progress" aria-live="polite">
-                      <span
-                        className={
-                          groupInfo.some((info) => info.pure) ? 'complete' : ''
-                        }
-                      >
-                        {groupInfo.some((info) => info.pure) ? '✓' : '○'} Pure
-                        sequence
-                      </span>
-                      <span className={sequenceCount >= 2 ? 'complete' : ''}>
-                        {Math.min(sequenceCount, 2)}/2 sequences
-                      </span>
-                      <span>
-                        {validCount}/{hand.length} grouped
-                      </span>
-                    </div>
-                  )}
+                  <div className="group-progress" aria-live="polite">
+                    <span
+                      className={
+                        groupInfo.some((info) => info.pure) ? 'complete' : ''
+                      }
+                    >
+                      {groupInfo.some((info) => info.pure) ? '✓' : '○'} Pure
+                      sequence
+                    </span>
+                    <span className={sequenceCount >= 2 ? 'complete' : ''}>
+                      {Math.min(sequenceCount, 2)}/2 sequences
+                    </span>
+                    <span>
+                      {validCount}/{hand.length} grouped
+                    </span>
+                  </div>
                   <div className="hand-hint">
                     Arrange prioritizes a pure sequence, two sequences, then the
                     most grouped cards. Invalid declarations cost 80 points.
@@ -1164,7 +1204,11 @@ export default function Home() {
                     <button
                       className="quiet"
                       disabled={g.status !== 'playing'}
-                      onClick={() => setConfirm('drop')}
+                      onClick={() => {
+                        const reason = dropRestriction(g, g.me);
+                        if (reason) setError(reason);
+                        else setConfirm('drop');
+                      }}
                     >
                       Drop round
                     </button>
@@ -1258,8 +1302,16 @@ export default function Home() {
           <RulesPages page={rulePage} setPage={setRulePage} />
         </DialogContent>
       </Dialog>
-      <Dialog open={scores} onOpenChange={setScores}>
-        <DialogContent className="modal wide score-modal">
+      <Dialog
+        open={scores}
+        onOpenChange={(open) => {
+          if (g?.status !== 'ended' || open) setScores(open);
+        }}
+      >
+        <DialogContent
+          className="modal wide score-modal"
+          showCloseButton={g?.status !== 'ended'}
+        >
           <DialogTitle>
             {g?.matchOver
               ? 'Final scoreboard'
@@ -1286,8 +1338,13 @@ export default function Home() {
                     <button onClick={leave} className="secondary">
                       Return to menu
                     </button>
-                    <button disabled={busy} onClick={() => call('restart')}>
-                      Play again ↗
+                    <button
+                      disabled={busy || g.ready?.[g.me]}
+                      onClick={() => call('restart')}
+                    >
+                      {g.ready?.[g.me]
+                        ? 'Waiting for opponent…'
+                        : 'Play again ↗'}
                     </button>
                   </div>
                 </div>
@@ -1377,16 +1434,30 @@ export default function Home() {
               </div>
               {g.status === 'ended' && (
                 <div className="score-panel" hidden={scoreTab === -1}>
-                  <RoundHands game={g} playerIndex={Math.max(0, scoreTab)} />
+                  <FittedPanel>
+                    <RoundHands game={g} playerIndex={Math.max(0, scoreTab)} />
+                  </FittedPanel>
                 </div>
+              )}
+              {g.status === 'ended' && (
+                <p className="ready-status" role="status">
+                  {g.players
+                    .map(
+                      (p, i) =>
+                        `${p.name}: ${g.ready?.[i] ? 'Ready ✓' : 'Reviewing hand'}`,
+                    )
+                    .join(' · ')}
+                </p>
               )}
               {g.status === 'ended' && !g.matchOver && (
                 <button
                   className="score-next"
-                  disabled={busy}
+                  disabled={busy || g.ready?.[g.me]}
                   onClick={() => call('next')}
                 >
-                  Play next round ↗
+                  {g.ready?.[g.me]
+                    ? 'Waiting for opponent…'
+                    : 'Play next round ↗'}
                 </button>
               )}
             </>

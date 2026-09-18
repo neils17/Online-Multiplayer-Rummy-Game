@@ -46,7 +46,7 @@ export function chooseBotDiscard(
   wild: number,
   picked: string | null,
 ) {
-  const legal = hand.filter((c) => c.id !== picked);
+  const legal = hand;
   if (!legal.length) throw Error('The bot has no legal discard.');
   return [...legal].sort(
     (a, b) =>

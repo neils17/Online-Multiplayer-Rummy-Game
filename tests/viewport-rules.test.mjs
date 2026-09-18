@@ -67,10 +67,6 @@ for (const card of [
   act(g, 0, 'open');
   assert.deepEqual(g.players[0].hand.at(-1), card);
   assert.ok(isWild(g.players[0].hand.at(-1), 7), 'opening joker stays wild');
-  assert.throws(
-    () => act(g, 0, 'discard', card.id),
-    'cannot return picked card',
-  );
   g.picked = null;
   act(g, 0, 'discard', card.id);
   assert.deepEqual(g.pile.at(-1), droppedCard(card, g.wild));

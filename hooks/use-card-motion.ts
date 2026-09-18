@@ -2,6 +2,7 @@
 import { useLayoutEffect, useRef, useState, useEffect } from 'react';
 import { moveToGroup, pruneEmptiedGroups } from '@/lib/arrange';
 import { flushSync } from 'react-dom';
+import { positionCard } from '@/lib/card-position';
 import type { Card } from '@/lib/game';
 export const INCOMING = '__incoming';
 type Source = 'hand' | 'draw' | 'open';
@@ -19,6 +20,8 @@ type Gesture = {
   settling: boolean;
   original: string[];
   group?: string;
+  sourceGroup?: string;
+  zones?: { id: string; rect: DOMRect }[];
   drawRequest?: Promise<Card | null>;
 };
 export function useCardMotion(
@@ -111,7 +114,14 @@ export function useCardMotion(
     const tilt = matchMedia('(prefers-reduced-motion: reduce)').matches
       ? 0
       : Math.max(-7, Math.min(7, dx / 32));
-    el.style.transform = `translate3d(${dx}px,${dy}px,0) rotate(${tilt}deg) scale(1.025)`;
+    positionCard(
+      el,
+      d.origin.left + dx,
+      d.origin.top + dy,
+      d.origin.width * 1.025,
+      d.origin.height * 1.025,
+      tilt,
+    );
     if (d.moved && !d.settling) {
       const rail = hand.current;
       if (rail && inHand(d.px, d.py)) {
@@ -123,7 +133,7 @@ export function useCardMotion(
     }
   }
   useLayoutEffect(() => {
-    if (drag && !frame.current) frame.current = requestAnimationFrame(paint);
+    if (drag && ghost.current && !frame.current) paint();
   }, [drag]);
   function start(
     e: React.PointerEvent<HTMLButtonElement>,
@@ -132,6 +142,7 @@ export function useCardMotion(
     face: Card | null,
   ) {
     if (e.button !== 0 || active.current) return;
+    e.preventDefault?.();
     const card =
       source === 'hand'
         ? e.currentTarget
@@ -151,6 +162,15 @@ export function useCardMotion(
       moved: false,
       settling: false,
       original: [...orderRef.current],
+      sourceGroup:
+        e.currentTarget.closest<HTMLElement>('[data-hand-group]')?.dataset
+          ?.handGroup,
+      zones: Array.from(
+        hand.current?.querySelectorAll<HTMLElement>('[data-hand-group]') || [],
+      ).map((el) => ({
+        id: el.dataset.handGroup!,
+        rect: el.getBoundingClientRect(),
+      })),
     };
     active.current = d;
     // A closed-deck pointer press commits exactly one draw. The server reveals
@@ -176,14 +196,16 @@ export function useCardMotion(
       y <= r.bottom + 25
     );
   }
-  function placeInHand(d: Gesture, x: number, y: number) {
+  function placeInHand(d: Gesture, x: number, y: number, release = false) {
     const zones = Array.from(
       hand.current?.querySelectorAll<HTMLElement>('[data-hand-group]') || [],
     );
     let zone = zones[0],
       distance = Infinity;
     for (const el of zones) {
-      const r = el.getBoundingClientRect();
+      const r =
+        d.zones?.find((z) => z.id === el.dataset.handGroup)?.rect ||
+        el.getBoundingClientRect();
       const dx = Math.max(r.left - x, 0, x - r.right),
         dy = Math.max(r.top - y, 0, y - r.bottom);
       const score = Math.hypot(dx, dy * 1.6);
@@ -195,7 +217,9 @@ export function useCardMotion(
     // Keep a small boundary cushion while a group changes width under the pointer.
     const currentZone = zones.find((el) => el.dataset.handGroup === d.group);
     if (currentZone) {
-      const r = currentZone.getBoundingClientRect();
+      const r =
+        d.zones?.find((z) => z.id === d.group)?.rect ||
+        currentZone.getBoundingClientRect();
       if (
         x >= r.left - 10 &&
         x <= r.right + 10 &&
@@ -207,6 +231,12 @@ export function useCardMotion(
     if (!zone) return;
     const group = zone.dataset.handGroup!;
     d.group = group;
+    zones.forEach((el) => {
+      el.dataset.dropTarget = String(el.dataset.handGroup === group);
+    });
+    // Only rearrange within the source group while hovering. Cross-group moves
+    // are committed once on release, so targets cannot wrap away from a finger.
+    if (!release && (d.source !== 'hand' || group !== d.sourceGroup)) return;
     const els = Array.from(
       zone.querySelectorAll<HTMLElement>('[data-card]'),
     ).filter((el) => el.dataset.card !== d.id);
@@ -249,6 +279,11 @@ export function useCardMotion(
     landingDone.current = null;
     cancelAnimationFrame(frame.current);
     frame.current = 0;
+    hand.current
+      ?.querySelectorAll<HTMLElement>('[data-hand-group]')
+      .forEach((el) => {
+        delete el.dataset.dropTarget;
+      });
     active.current = null;
     setDrag(null);
   }
@@ -298,7 +333,7 @@ export function useCardMotion(
           (position.every((p, i) => Math.abs(p - goal[i]) < 0.15) &&
             velocity.every((v) => Math.abs(v) < 2));
         const p = settled ? goal : position;
-        el.style.transform = `translate3d(${p[0] - d.origin.left}px,${p[1] - d.origin.top}px,0) rotate(${p[4]}deg) scale(${p[2] / d.origin.width},${p[3] / d.origin.height})`;
+        positionCard(el, p[0], p[1], p[2], p[3], p[4]);
         if (settled) {
           frame.current = 0;
           resolve();
@@ -345,7 +380,7 @@ export function useCardMotion(
     lastTap.current = null;
     d.px = e.clientX;
     d.py = e.clientY;
-    if (!cancel && inHand(d.px, d.py)) placeInHand(d, d.px, d.py);
+    if (!cancel && inHand(d.px, d.py)) placeInHand(d, d.px, d.py, true);
     d.settling = true;
     setDrag({ ...d });
     cancelAnimationFrame(frame.current);
@@ -364,7 +399,12 @@ export function useCardMotion(
       return;
     }
     if (d.source !== 'hand') {
-      if (d.source !== 'draw' && !inHand(d.px, d.py)) {
+      const overDiscard =
+        !cancel &&
+        !!document
+          .elementFromPoint(d.px, d.py)
+          ?.closest('[data-drop="discard"]');
+      if (d.source !== 'draw' && !inHand(d.px, d.py) && !overDiscard) {
         update(orderRef.current.filter((id) => id !== INCOMING));
         await land(d.origin);
         return;
@@ -387,12 +427,11 @@ export function useCardMotion(
           .map((c) => (c === INCOMING ? id : c)),
       );
       setDrag({ ...d });
-      const discard =
-        !cancel && d.source === 'draw'
-          ? document
-              .elementFromPoint(d.px, d.py)
-              ?.closest<HTMLElement>('[data-drop="discard"]')
-          : null;
+      const discard = !cancel
+        ? document
+            .elementFromPoint(d.px, d.py)
+            ?.closest<HTMLElement>('[data-drop="discard"]')
+        : null;
       if (discard) {
         const rect = discard
           .querySelector('.playing-card')!
@@ -473,6 +512,7 @@ export function useCardMotion(
     move,
     end,
     click,
+    getOrder: () => orderRef.current,
     sort: (next: string[]) =>
       update(
         orderRef.current.includes(INCOMING) && !next.includes(INCOMING)

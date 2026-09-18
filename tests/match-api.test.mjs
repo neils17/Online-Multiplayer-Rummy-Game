@@ -1,70 +1,108 @@
 import assert from 'node:assert/strict';
+import { winningDiscard } from '../lib/game.ts';
 const base = process.env.GAME_URL || 'http://localhost:3000';
 const api = async (body) => {
-  const r = await fetch(base + '/api/game', {
+  const response = await fetch(base + '/api/game', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  return { status: r.status, ...(await r.json()) };
+  return { status: response.status, ...(await response.json()) };
 };
-for (const maxScore of [100, 152, 101.5])
-  assert.equal(
-    (await api({ action: 'create', name: 'Validation', maxScore })).status,
-    400,
-  );
+for (const decks of [0, 3, '1'])
+  assert.equal((await api({ action: 'create', decks })).status, 400);
 const a = await api({
   action: 'create',
-  name: 'Expert host',
+  name: 'Host',
   expert: true,
-  maxScore: 151,
+  maxScore: 101,
+  decks: 1,
 });
-assert.equal(a.status, 200);
-const seat = { code: a.game.code, token: a.token };
 const b = await api({
   action: 'join',
   name: 'Guest',
   code: a.game.code,
-  expert: false,
-  maxScore: 101,
+  decks: 2,
 });
-assert.equal(b.status, 200);
+assert.equal(b.game.decks, 1);
+assert.equal(b.game.remaining, 25);
 assert.equal(b.game.expert, true);
-assert.equal(b.game.maxScore, 151);
+const seats = [
+  { code: a.game.code, token: a.token },
+  { code: a.game.code, token: b.token },
+];
 let g = b.game;
-for (let i = 0; i < 8; i++) {
-  const drop = await api({ ...seat, action: 'drop' });
-  assert.equal(drop.status, 200);
-  g = drop.game;
-  assert.equal(g.players[0].score, (i + 1) * 20);
-  assert.equal(g.matchOver, i === 7);
-  if (i < 7) assert.equal((await api({ ...seat, action: 'next' })).status, 200);
+for (let round = 1; round <= 5; round++) {
+  g = (await api({ ...seats[0], action: 'drop' })).game;
+  assert.equal(g.players[0].score, round * 20);
+  const readiness = seats.map((seat) => ({
+    ...seat,
+    action: 'next',
+    round: g.round,
+    match: g.match,
+  }));
+  if (round === 1) {
+    const first = await api(readiness[0]);
+    assert.equal(first.game.status, 'ended');
+    assert.deepEqual(first.game.ready, [true, false]);
+    g = (await api(readiness[1])).game;
+  } else {
+    const responses = await Promise.all(readiness.map(api));
+    assert.ok(responses.every((r) => r.status === 200));
+    g = (await api({ ...seats[0], action: 'poll' })).game;
+  }
+  assert.equal(g.round, round + 1);
+  assert.equal(g.status, 'playing');
+  assert.equal(
+    (await api(readiness[0])).game.round,
+    round + 1,
+    'stale ready press cannot advance another round',
+  );
 }
-assert.equal(g.winner, 1);
-assert.equal(g.history.length, 8);
-assert.equal((await api({ ...seat, action: 'next' })).status, 400);
-const restart = await api({ ...seat, action: 'restart' });
-assert.equal(restart.status, 200);
-assert.equal(restart.game.match, 2);
-assert.equal(restart.game.expert, true);
-assert.equal(restart.game.maxScore, 151);
+const blocked = await api({ ...seats[0], action: 'drop' });
+assert.equal(blocked.status, 400);
+assert.match(blocked.error, /can’t drop/);
+// Immediate open-pile rediscard is authoritative and retains card identity.
+const player = g.turn,
+  top = g.pile[0];
+let state = (await api({ ...seats[player], action: 'open' })).game;
+state = (await api({ ...seats[player], action: 'discard', cardId: top.id }))
+  .game;
+assert.equal(state.pile[0].id, top.id);
+// Finish through declarations to exercise the rematch barrier as well.
+while (!state.matchOver) {
+  const who = state.turn;
+  state = (await api({ ...seats[who], action: 'draw' })).game;
+  if (winningDiscard(state.players[who].hand, state.wild.r, null)) {
+    state = (
+      await api({
+        ...seats[who],
+        action: 'discard',
+        cardId: state.players[who].hand.at(-1).id,
+      })
+    ).game;
+    continue;
+  }
+  state = (await api({ ...seats[who], action: 'declare' })).game;
+  if (!state.matchOver) {
+    await api({ ...seats[0], action: 'next' });
+    state = (await api({ ...seats[1], action: 'next' })).game;
+  }
+}
+const readyAgain = await api({ ...seats[0], action: 'restart' });
+assert.equal(readyAgain.game.status, 'ended');
+const rematch = await api({ ...seats[1], action: 'restart' });
+assert.equal(rematch.game.match, 2);
+assert.equal(rematch.game.round, 1);
+assert.equal(rematch.game.decks, 1);
 assert.deepEqual(
-  restart.game.players.map((p) => p.score),
+  rematch.game.players.map((p) => p.score),
   [0, 0],
 );
-assert.equal(restart.game.history.length, 0);
-assert.equal(restart.game.round, 1);
-assert.equal(restart.game.players[0].count, 13);
-const bot = await api({
-  action: 'practice',
-  name: 'Solo',
-  expert: true,
-  maxScore: 117,
-});
-assert.equal(bot.status, 200);
-assert.equal(bot.game.expert, true);
-assert.equal(bot.game.maxScore, 117);
-assert.equal(bot.game.players[1].name, 'Rummy Bot');
+const practice = await api({ action: 'practice', decks: 2, expert: true });
+const solo = { code: practice.game.code, token: practice.token };
+await api({ ...solo, action: 'drop' });
+assert.equal((await api({ ...solo, action: 'next' })).game.round, 2);
 console.log(
-  'PASS: settings validation, shared host options, 151-point match completion, final winner, blocked extra round, clean rematch, and expert bot mode at 117 points.',
+  'PASS: shared deck options, immediate rediscard, drop rejection, simultaneous readiness, stale requests, two-player rematches and bot auto-readiness.',
 );

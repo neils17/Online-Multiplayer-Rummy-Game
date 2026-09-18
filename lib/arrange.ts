@@ -192,7 +192,6 @@ export function arrangeHand(
   if (n === 14) {
     let best = -Infinity;
     for (let i = 0; i < n; i++) {
-      if (hand[i].id === picked) continue;
       const m = full ^ (1 << i);
       const score = solve(m, 0, 0);
       if (
@@ -252,4 +251,72 @@ export function arrangeHand(
   if (singles.length) out.push(singles);
   if (spare >= 0) out.push([hand[spare]]);
   return out;
+}
+
+// Equal physical copies are interchangeable to the solver, but not to a player
+// watching their hand. Keep existing copies and group keys wherever possible.
+export function stableArrangement(
+  proposed: string[][],
+  hand: Card[],
+  order: string[],
+  newGroup: () => string,
+) {
+  const cards = new Map(hand.map((c) => [c.id, c]));
+  const face = (id: string) => {
+    const c = cards.get(id)!;
+    return `${c.r}/${c.s}/${!!c.naturalOnly}/${!!c.printed}`;
+  };
+  const signature = (ids: string[]) => ids.map(face).sort().join('|');
+  const old = splitGroups(order).map((g) => ({
+    ...g,
+    ids: g.ids.filter((id) => cards.has(id)),
+  }));
+  const taken = new Set<number>();
+  const matches = proposed.map((ids) => {
+    const exact = old.findIndex(
+      (g, i) => !taken.has(i) && signature(g.ids) === signature(ids),
+    );
+    if (exact >= 0) taken.add(exact);
+    return exact;
+  });
+  const used = new Set<string>();
+  const output = proposed.map((ids, i) => {
+    const match = matches[i];
+    if (match >= 0) {
+      old[match].ids.forEach((id) => used.add(id));
+      return { ...old[match], index: match };
+    }
+    return { id: '', ids, index: old.length + i };
+  });
+  const pool = [
+    ...order.filter((id) => cards.has(id)),
+    ...hand.map((c) => c.id).filter((id) => !order.includes(id)),
+  ];
+  output.forEach((group, i) => {
+    if (matches[i] >= 0) return;
+    group.ids = group.ids.map((id) => {
+      const copy = pool.find(
+        (candidate) => !used.has(candidate) && face(candidate) === face(id),
+      )!;
+      used.add(copy);
+      return copy;
+    });
+    let best = -1,
+      overlap = 0;
+    old.forEach((previous, index) => {
+      const count = previous.ids.filter((id) => group.ids.includes(id)).length;
+      if (!taken.has(index) && count > overlap) {
+        best = index;
+        overlap = count;
+      }
+    });
+    if (best >= 0) {
+      taken.add(best);
+      group.id = old[best].id;
+      group.index = best;
+    } else group.id = newGroup();
+  });
+  return output
+    .sort((a, b) => a.index - b.index)
+    .flatMap((g) => [g.id, ...g.ids]);
 }

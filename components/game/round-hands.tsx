@@ -138,6 +138,18 @@ export function RoundHands({
               )
             )}
             <div className="review-groups">
+              {round?.discard && round.winner === i && (
+                <div className="review-group winning-discard">
+                  <div className="review-group-label">
+                    <strong>Winning discard</strong>
+                  </div>
+                  <div className="review-cards">
+                    <div className="playing-card">
+                      <CardFace c={round.discard} />
+                    </div>
+                  </div>
+                </div>
+              )}
               {groups.map((cards, j) => (
                 <div className={`review-group group-${infos[j].kind}`} key={j}>
                   <div className="review-group-label">

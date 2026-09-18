@@ -53,7 +53,12 @@ const pileRect = rect(260, 100),
 let animations = [];
 const element = (r, data = {}) => ({
   dataset: data,
-  style: { transform: '', visibility: '' },
+  style: {
+    transform: '',
+    visibility: '',
+    width: `${r.width}px`,
+    height: `${r.height}px`,
+  },
   getBoundingClientRect: () => r,
   animate: (keyframes, options) => {
     animations.push({ keyframes, options });
@@ -147,8 +152,8 @@ async function gesture({
   assert.equal(
     motion.ghost.current.style.transform,
     direct && !cancel
-      ? 'translate3d(140px,0px,0) rotate(0deg) scale(1,1)'
-      : 'translate3d(-70px,230px,0) rotate(0deg) scale(1,1)',
+      ? 'translate3d(260px,100px,0) rotate(0deg) scale(1,1)'
+      : 'translate3d(50px,330px,0) rotate(0deg) scale(1,1)',
     'card settles exactly onto its real destination, flat and at full size',
   );
   let prevented = false;
@@ -206,7 +211,7 @@ for (let i = 0; i < 30; i++) {
   assert.equal(source.style.visibility, '');
   assert.equal(
     flight.element.current.style.transform,
-    'translate3d(180px,240px,0) scale(1.1111111111111112,1.1111111111111112)',
+    'translate3d(180px,240px,0) rotate(0deg) scale(1.1111111111111112,1.1111111111111112)',
   );
 }
 console.log(
@@ -294,5 +299,100 @@ console.log(
   await new Promise((r) => setTimeout(r, 510));
   console.log(
     'PASS: a half-scale mobile hand inserts at the correct physical pointer position.',
+  );
+}
+
+// A translated overlay (keyboard/browser chrome at mobile startup) must not
+// translate the dragged card away from the same client-coordinate finger.
+{
+  const { positionCard } = await import('../lib/card-position.ts');
+  const el = element(rect(100, 200, 90, 126));
+  el.parentElement = {
+    offsetWidth: 800,
+    getBoundingClientRect: () => rect(0, -180, 800, 400),
+  };
+  positionCard(el, 100, 200, 90, 126);
+  assert.equal(
+    el.style.transform,
+    'translate3d(100px,380px,0) rotate(0deg) scale(1,1)',
+  );
+  el.parentElement = {
+    offsetWidth: 800,
+    getBoundingClientRect: () => rect(0, 0, 800, 400),
+  };
+  positionCard(el, 100, 200, 90, 126);
+  assert.equal(
+    el.style.transform,
+    'translate3d(100px,200px,0) rotate(0deg) scale(1,1)',
+  );
+  console.log(
+    'PASS: ghost compensates for a changing mobile overlay origin without shifting away from its client-coordinate anchor.',
+  );
+}
+{
+  let order = ['~group:left', 'a', 'b', '~group:right', 'c', 'd'];
+  const original = [...order];
+  const zones = [
+    { id: '~group:left', left: 100, top: 330 },
+    { id: '~group:right', left: 300, top: 290 },
+  ].map((z) => ({
+    dataset: { handGroup: z.id },
+    getBoundingClientRect: () => rect(z.left, z.top, 135, 126),
+    offsetWidth: 135,
+    querySelectorAll: () => cardsIn(z.id).map(cardEl),
+  }));
+  function cardsIn(group) {
+    const i = order.indexOf(group);
+    let end = order.findIndex((id, j) => j > i && id.startsWith('~'));
+    if (end < 0) end = order.length;
+    return order.slice(i + 1, end);
+  }
+  function cardEl(id) {
+    const group = zones.find((z) => cardsIn(z.dataset.handGroup).includes(id));
+    const slot = cardsIn(group.dataset.handGroup).indexOf(id);
+    const r = group.getBoundingClientRect();
+    return {
+      ...element(rect(r.left + slot * 45, r.top), { card: id }),
+      offsetWidth: 90,
+      offsetLeft: slot * 45,
+      offsetParent: group,
+      closest: (selector) =>
+        selector === 'main' ? { setPointerCapture() {} } : group,
+    };
+  }
+  const motion = useCardMotion(
+    order,
+    (next) => (order = next),
+    async () => null,
+    async () => false,
+    'stable-targets',
+  );
+  motion.hand.current = {
+    getBoundingClientRect: () => rect(80, 270, 440, 220),
+    querySelectorAll: (selector) =>
+      selector === '[data-card]'
+        ? order.filter((id) => !id.startsWith('~')).map(cardEl)
+        : zones,
+  };
+  motion.ghost.current = element(rect(100, 330));
+  motion.start(event(115, 350, cardEl('a')), 'hand', 'a', {
+    id: 'a',
+    r: 4,
+    s: 0,
+  });
+  motion.move(event(325, 310, cardEl('a')));
+  await new Promise((r) => setTimeout(r, 20));
+  assert.deepEqual(
+    order,
+    original,
+    'hovering a different group does not move or resize either group',
+  );
+  assert.equal(zones[1].dataset.dropTarget, 'true');
+  await motion.end(event(325, 310, cardEl('a')));
+  assert.ok(cardsIn('~group:right').includes('a'));
+  assert.deepEqual(cardsIn('~group:left'), ['b']);
+  await new Promise((r) => setTimeout(r, 510));
+  console.log(
+    'PASS: top-right cross-group target remains stationary until a single insertion on release.',
   );
 }

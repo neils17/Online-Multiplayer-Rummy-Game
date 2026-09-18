@@ -4,7 +4,7 @@ export function preloadDeck() {
   return (ready ||= Promise.all(
     [
       '/cards/rider-back.jpg',
-      '/cards/jester.webp',
+      '/cards/jester-white.png',
       ...Array.from({ length: 52 }, (_, i) =>
         cardAsset({ id: '', r: (i % 13) + 1, s: Math.floor(i / 13) }),
       ),

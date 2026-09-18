@@ -9,34 +9,35 @@ export function useViewportStage() {
     insetProbe.style.cssText =
       'position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)';
     document.body.appendChild(insetProbe);
+    const measure = () => {
+      const viewport = window.visualViewport;
+      const inset = getComputedStyle(insetProbe);
+      const left = parseFloat(inset.paddingLeft) || 0,
+        right = parseFloat(inset.paddingRight) || 0;
+      const top = parseFloat(inset.paddingTop) || 0,
+        bottom = parseFloat(inset.paddingBottom) || 0;
+      const stage = fitViewport(
+        (viewport?.width || innerWidth) - left - right,
+        (viewport?.height || innerHeight) - top - bottom,
+      );
+      root.style.setProperty('--ui-scale', String(stage.scale));
+      root.style.setProperty('--stage-width', `${stage.width}px`);
+      root.style.setProperty('--stage-height', `${stage.height}px`);
+      root.style.setProperty(
+        '--viewport-left',
+        `${(viewport?.offsetLeft || 0) + left}px`,
+      );
+      root.style.setProperty(
+        '--viewport-top',
+        `${(viewport?.offsetTop || 0) + top}px`,
+      );
+      root.dataset.layout = stage.landscape ? 'landscape' : 'portrait';
+    };
     const resize = () => {
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        const viewport = window.visualViewport;
-        const inset = getComputedStyle(insetProbe);
-        const left = parseFloat(inset.paddingLeft) || 0,
-          right = parseFloat(inset.paddingRight) || 0;
-        const top = parseFloat(inset.paddingTop) || 0,
-          bottom = parseFloat(inset.paddingBottom) || 0;
-        const stage = fitViewport(
-          (viewport?.width || innerWidth) - left - right,
-          (viewport?.height || innerHeight) - top - bottom,
-        );
-        root.style.setProperty('--ui-scale', String(stage.scale));
-        root.style.setProperty('--stage-width', `${stage.width}px`);
-        root.style.setProperty('--stage-height', `${stage.height}px`);
-        root.style.setProperty(
-          '--viewport-left',
-          `${(viewport?.offsetLeft || 0) + left}px`,
-        );
-        root.style.setProperty(
-          '--viewport-top',
-          `${(viewport?.offsetTop || 0) + top}px`,
-        );
-        root.dataset.layout = stage.landscape ? 'landscape' : 'portrait';
-      });
+      frame = requestAnimationFrame(measure);
     };
-    resize();
+    measure();
     window.addEventListener('resize', resize);
     window.visualViewport?.addEventListener('resize', resize);
     window.visualViewport?.addEventListener('scroll', resize);

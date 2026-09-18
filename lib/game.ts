@@ -13,6 +13,7 @@ export type RoundResult = {
   multiplier?: number;
   winner?: number;
   bonus?: 'sets' | 'sequences';
+  discard?: Card;
 };
 export type Player = {
   bot?: boolean;
@@ -24,6 +25,8 @@ export type Player = {
 };
 export type Game = {
   botAt?: number;
+  decks?: 1 | 2;
+  ready?: boolean[];
   expert?: boolean;
   maxScore?: number;
   match?: number;
@@ -57,13 +60,18 @@ export function droppedCard(c: Card, wild: Card): Card {
       }
     : c;
 }
-export function gameOptions(expert: unknown, maxScore: unknown) {
+export function gameOptions(
+  expert: unknown,
+  maxScore: unknown,
+  decks: unknown = 2,
+) {
   if (expert !== undefined && typeof expert !== 'boolean')
     throw Error('Choose standard or expert mode.');
   const limit = maxScore === undefined ? 101 : Number(maxScore);
   if (!Number.isInteger(limit) || limit < 101 || limit > 151)
     throw Error('Choose a score limit from 101 to 151.');
-  return { expert: expert === true, maxScore: limit };
+  if (decks !== 1 && decks !== 2) throw Error('Choose one or two decks.');
+  return { expert: expert === true, maxScore: limit, decks: decks as 1 | 2 };
 }
 export const value = (c: Card, w: number) =>
   isWild(c, w) ? 0 : c.r === 1 ? 10 : Math.min(c.r, 10);
@@ -84,7 +92,7 @@ export function shuffle(a: Card[]) {
 }
 export function deal(g: Game) {
   const d: Card[] = [];
-  for (let k = 0; k < 2; k++) {
+  for (let k = 0; k < (g.decks ?? 2); k++) {
     for (let s = 0; s < 4; s++)
       for (let r = 1; r <= 13; r++) d.push({ id: `${k}-${s}-${r}`, r, s });
     d.push({ id: `j${k}`, r: 0, s: 0 });
@@ -108,6 +116,7 @@ export function deal(g: Game) {
   g.matchOver = false;
   g.winner = null;
   g.picked = null;
+  g.ready = g.players.map(() => false);
   g.message = 'A new round is on the table.';
 }
 // A meld may have more than one interpretation: retain all of them for exact hand search.
@@ -169,7 +178,7 @@ export function naturalCompletion(hand: Card[], picked: string | null = null) {
         if (isSequence) sequences[i].push(mask);
       }
   }
-  for (const kind of ['sets', 'sequences'] as const) {
+  for (const kind of ['sequences'] as ('sets' | 'sequences')[]) {
     const candidates = kind === 'sets' ? sets : sequences;
     const memo = new Map<number, number[] | null>();
     function solve(mask: number): number[] | null {
@@ -188,10 +197,7 @@ export function naturalCompletion(hand: Card[], picked: string | null = null) {
       memo.set(mask, null);
       return null;
     }
-    const discards =
-      n === 14
-        ? hand.map((_, i) => i).filter((i) => hand[i].id !== picked)
-        : [-1];
+    const discards = n === 14 ? hand.map((_, i) => i) : [-1];
     for (const i of discards) {
       const result = solve(i < 0 ? full : full ^ (1 << i));
       if (result)
@@ -222,14 +228,12 @@ export function analyze(hand: Card[], w: number) {
   function best(mask: number, seq: number, pure: boolean): number {
     const key = `${mask}/${seq}/${pure}`;
     if (memo.has(key)) return memo.get(key)!;
-    let result = 0;
+    let result = pure && seq >= 2 ? 0 : -Infinity;
     for (const c of candidates) {
       if ((mask & c.mask) !== c.mask) continue;
       const ns = Math.min(2, seq + (c.type > 0 ? 1 : 0));
       const np = pure || c.type === 2; // A set is exempt only once both sequence requirements are met.
-      const earned =
-        c.type === 2 || (pure && (c.type === 1 || seq >= 2)) ? c.points : 0;
-      result = Math.max(result, earned + best(mask ^ c.mask, ns, np));
+      result = Math.max(result, c.points + best(mask ^ c.mask, ns, np));
     }
     memo.set(key, result);
     return result;
@@ -254,11 +258,14 @@ export function analyze(hand: Card[], w: number) {
     return ok;
   }
   const naturalWin = n === 13 && !!naturalCompletion(hand);
+  const exempt = best((1 << n) - 1, 0, false);
   return {
     valid: n === 13 && (naturalWin || valid((1 << n) - 1, 0, false)),
     penalty: naturalWin
       ? 0
-      : Math.min(80, total - best((1 << n) - 1, 0, false)),
+      : Number.isFinite(exempt)
+        ? Math.min(80, total - exempt)
+        : 80,
   };
 }
 export function finish(
@@ -267,11 +274,13 @@ export function finish(
   points: number,
   message: string,
   bonus?: 'sets' | 'sequences',
+  discard?: Card,
 ) {
   const basePoints = points;
   if (bonus) points *= 2;
   g.players[loser].score += points;
   g.status = 'ended';
+  g.ready = g.players.map((p) => !!p.bot);
   g.message = bonus
     ? `${message} Natural ${bonus}: double points (${basePoints} × 2 = ${points}).`
     : message;
@@ -291,6 +300,7 @@ export function finish(
     multiplier: bonus ? 2 : 1,
     winner: 1 - loser,
     bonus,
+    discard,
   });
 }
 // Search every legal discard with shared exact meld states. No selected card is required.
@@ -332,32 +342,31 @@ export function winningDiscard(
     memo.set(key, result);
     return result;
   }
-  return (
-    hand.find(
-      (card, i) => card.id !== picked && valid(full ^ (1 << i), 0, 0),
-    ) || null
-  );
+  return hand.find((_, i) => valid(full ^ (1 << i), 0, 0)) || null;
 }
 export function act(g: Game, i: number, a: string, cardId?: string) {
-  if (a === 'restart') {
-    if (!g.matchOver || g.status !== 'ended')
-      throw Error('Finish the match before playing again.');
-    g.players.forEach((p) => (p.score = 0));
-    g.history = [];
-    g.round = 0;
-    g.match = (g.match ?? 1) + 1;
-    deal(g);
-    return;
-  }
-  if (a === 'next') {
-    if (g.matchOver)
-      throw Error('The match is over. Choose Play again or Return to menu.');
+  if (a === 'restart' || a === 'next') {
     if (g.status !== 'ended') throw Error('Finish this round first.');
+    if (a === 'restart' && !g.matchOver)
+      throw Error('Finish the match before playing again.');
+    if (a === 'next' && g.matchOver)
+      throw Error('The match is over. Choose Play again or Return to menu.');
+    g.ready ||= g.players.map((p) => !!p.bot);
+    g.ready[i] = true;
+    if (!g.ready.every(Boolean)) return;
+    if (a === 'restart') {
+      g.players.forEach((p) => (p.score = 0));
+      g.history = [];
+      g.round = 0;
+      g.match = (g.match ?? 1) + 1;
+    }
     deal(g);
     return;
   }
   if (g.status !== 'playing') throw Error('The round is not in play.');
   if (a === 'drop') {
+    const reason = dropRestriction(g, i);
+    if (reason) throw Error(reason);
     finish(g, i, g.players[i].draws ? 40 : 20, `${g.players[i].name} dropped.`);
     return;
   }
@@ -367,10 +376,11 @@ export function act(g: Game, i: number, a: string, cardId?: string) {
     if (g.phase !== 'draw') throw Error('Discard a card first.');
     if (a === 'open' && !g.pile.length)
       throw Error('The discard pile is empty.');
-    if (!g.deck.length) {
+    if (a === 'draw' && !g.deck.length) {
       g.deck = shuffle(g.pile.splice(0, g.pile.length - 1));
-      if (!g.deck.length) {
+      if (a === 'draw' && !g.deck.length) {
         g.status = 'ended';
+        g.ready = g.players.map((p) => !!p.bot);
         g.message = 'The deck is exhausted. No points this round.';
         g.history.push({ round: g.round, points: [0, 0], message: g.message });
         return;
@@ -405,6 +415,7 @@ export function act(g: Game, i: number, a: string, cardId?: string) {
         penalty,
         `${p.name} declared a winning hand!`,
         naturalCompletion(p.hand)?.kind,
+        g.pile.at(-1),
       );
     } else {
       finish(g, i, 80, `${p.name} made an invalid declaration. 80 points.`);
@@ -415,8 +426,6 @@ export function act(g: Game, i: number, a: string, cardId?: string) {
     if (g.phase !== 'discard') throw Error('Draw a card first.');
     const ix = p.hand.findIndex((c) => c.id === cardId);
     if (ix < 0) throw Error('Choose a card to discard.');
-    if (cardId === g.picked)
-      throw Error('You cannot return the card you just picked up.');
     g.pile.push(droppedCard(p.hand.splice(ix, 1)[0], g.wild));
     g.turn = 1 - i;
     g.phase = 'draw';
@@ -424,4 +433,16 @@ export function act(g: Game, i: number, a: string, cardId?: string) {
     return;
   }
   throw Error('Unknown action.');
+}
+
+export function dropRestriction(
+  g: { players: { score: number; draws: number }[]; maxScore?: number },
+  i: number,
+) {
+  const penalty = g.players[i].draws ? 40 : 20;
+  const projected = g.players[i].score + penalty;
+  return projected >= (g.maxScore ?? 101) &&
+    projected > (g.players[1 - i]?.score ?? 0)
+    ? `You can’t drop: ${penalty} points would take your score to ${projected}, reaching the ${g.maxScore ?? 101}-point limit and losing the match. Keep playing this round.`
+    : '';
 }

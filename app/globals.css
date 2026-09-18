@@ -4288,3 +4288,118 @@ body {
   .card-back:first-child {
   margin-left: 0;
 }
+/* Viewport-calibrated card layer, outside all scaled table and dialog surfaces. */
+.card-motion-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 100;
+  contain: layout size;
+}
+.card-motion-layer > .playing-card {
+  position: absolute;
+  left: 0;
+  top: 0;
+  margin: 0;
+  visibility: hidden;
+  transform-origin: top left;
+}
+.playing-card .deck-face.joker-art {
+  background: #fff;
+}
+.playing-card .fixed-marker {
+  line-height: 1.15;
+  text-align: center;
+}
+.shell.casino.game-shell .hand-group[data-drop-target='true'] {
+  outline: 2px solid #efd485;
+  outline-offset: 2px;
+  background-color: #345d3a;
+}
+.shell.casino.game-shell .center-label {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  height: 32px;
+}
+.shell.casino.game-shell .center-label > .eyebrow {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 4px 8px;
+  line-height: 16px;
+  flex: 0 0 auto;
+  margin: 0;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.shell.casino.game-shell .center-label h2 {
+  min-height: 0;
+  margin: 0;
+  line-height: 28px;
+  font-size: 21px;
+}
+:root[data-layout='portrait'] .shell.casino.game-shell .center-label {
+  gap: 8px;
+}
+:root[data-layout='portrait'] .shell.casino.game-shell .center-label h2 {
+  font-size: 18px;
+}
+.game-settings .deck-setting {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+  margin-top: 10px;
+}
+.game-settings select {
+  background: #10261d;
+  color: #eadab4;
+  border: 1px solid #967c4d;
+  border-radius: 7px;
+  padding: 7px;
+  font-size: 13px;
+}
+.shell.casino .welcome h1 {
+  font-size: 42px;
+  margin: 8px 0;
+}
+.shell.casino .game-settings {
+  margin: 8px 0;
+}
+.casino button {
+  touch-action: manipulation;
+}
+.casino button:not(.hand-card):not(.pile-button):active,
+.modal button:active {
+  scale: 0.97;
+}
+.casino .arrange-button {
+  min-width: 94px;
+}
+.casino .arrange-button[aria-busy='true'] {
+  opacity: 1;
+  cursor: progress;
+}
+.ready-status {
+  margin: 0;
+  text-align: center;
+  font-size: 12px;
+  color: #e8c984;
+}
+.fitted-panel {
+  height: 100%;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+}
+.fitted-panel > div {
+  width: 100%;
+  transform-origin: center top;
+}
+.winning-discard {
+  border-color: #d4b369 !important;
+  background: #453d2066;
+}

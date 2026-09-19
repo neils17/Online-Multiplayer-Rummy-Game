@@ -36,3 +36,7 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+
+# local build metadata and runtime profile
+*.tsbuildinfo
+/.sites-runtime/

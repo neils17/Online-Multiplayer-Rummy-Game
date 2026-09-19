@@ -1,6 +1,14 @@
 'use client';
 import { useLayoutEffect, useRef, useState, useEffect } from 'react';
-import { moveToGroup, pruneEmptiedGroups } from '@/lib/arrange';
+import {
+  moveToGroup,
+  pruneEmptiedGroups,
+  ensureDiscardGroup,
+  ensureDrawGroup,
+  reserveInGroup,
+  splitGroups,
+  DISCARD_GROUP,
+} from '@/lib/arrange';
 import { flushSync } from 'react-dom';
 import { positionCard } from '@/lib/card-position';
 import type { Card } from '@/lib/game';
@@ -60,7 +68,7 @@ export function useCardMotion(
     );
   }
   function update(next: string[]) {
-    next = pruneEmptiedGroups(next, orderRef.current);
+    next = ensureDiscardGroup(pruneEmptiedGroups(next, orderRef.current));
     if (next.join('|') === orderRef.current.join('|')) return;
     snapshot();
     orderRef.current = next;
@@ -148,6 +156,7 @@ export function useCardMotion(
         ? e.currentTarget
         : e.currentTarget.querySelector<HTMLElement>('.playing-card,.deck');
     if (!card) return;
+    if (source !== 'hand') update(ensureDrawGroup(orderRef.current));
     const origin = card.getBoundingClientRect();
     const d: Gesture = {
       pointerId: e.pointerId,
@@ -202,7 +211,14 @@ export function useCardMotion(
     );
     let zone = zones[0],
       distance = Infinity;
+    const canEnter = (el: HTMLElement) =>
+      el.dataset.handGroup !== DISCARD_GROUP ||
+      !splitGroups(orderRef.current)
+        .find((g) => g.id === DISCARD_GROUP)
+        ?.ids.some((id) => id !== d.id && id !== d.face?.id);
+    zone = zones.find(canEnter)!;
     for (const el of zones) {
+      if (!canEnter(el)) continue;
       const r =
         d.zones?.find((z) => z.id === el.dataset.handGroup)?.rect ||
         el.getBoundingClientRect();
@@ -216,7 +232,7 @@ export function useCardMotion(
     }
     // Keep a small boundary cushion while a group changes width under the pointer.
     const currentZone = zones.find((el) => el.dataset.handGroup === d.group);
-    if (currentZone) {
+    if (currentZone && canEnter(currentZone)) {
       const r =
         d.zones?.find((z) => z.id === d.group)?.rect ||
         currentZone.getBoundingClientRect();
@@ -411,7 +427,7 @@ export function useCardMotion(
         return;
       }
       if (!orderRef.current.includes(INCOMING))
-        update([...orderRef.current, INCOMING]);
+        update(reserveInGroup(orderRef.current, INCOMING));
       const card = await (d.drawRequest || onDraw(d.source));
       const id = card?.id;
       if (active.current !== d) return;
@@ -549,7 +565,7 @@ export function useCardMotion(
         .find((el) => el.dataset.card === INCOMING)
         ?.getBoundingClientRect(),
     reserve: async () => {
-      update([...orderRef.current.filter((id) => id !== INCOMING), INCOMING]);
+      update(reserveInGroup(orderRef.current, INCOMING));
       await nextFrame();
       return elements()
         .find((el) => el.dataset.card === INCOMING)

@@ -60,6 +60,10 @@ export function RoundHands({
     return () => worker.terminate();
   }, [fingerprint]);
   const round = game.history.at(-1);
+  const savedGroups =
+    round?.declaredGroups?.player === playerIndex
+      ? round.declaredGroups.groups
+      : null;
   return (
     <div className="round-review">
       <div className="round-verdict">
@@ -80,10 +84,11 @@ export function RoundHands({
         </div>
       </div>
       <p className="review-note">
-        Best available groups for each final hand. Round penalties follow the
-        declaration or drop result; grouping does not change the recorded score.
+        {savedGroups
+          ? 'Actual groups at declaration. The winning discard is shown separately; the game checks all possible winning arrangements.'
+          : 'Best available groups for this final hand. Grouping does not change the recorded score.'}
       </p>
-      {!grouped && (
+      {!grouped && !savedGroups && (
         <p role="status">
           {failed
             ? 'Showing final hands. Group analysis is unavailable.'
@@ -92,7 +97,7 @@ export function RoundHands({
       )}
       {game.players.map((p, i) => {
         if (i !== playerIndex) return null;
-        const groups = grouped?.[i]?.map((ids) =>
+        const groups = (savedGroups || grouped?.[i])?.map((ids) =>
           ids.map((id) => p.hand.find((c) => c.id === id)!),
         ) || [p.hand];
         const infos = groups.map((cards) => describeGroup(cards, game.wild.r));
@@ -123,7 +128,7 @@ export function RoundHands({
                 </span>
               </div>
             ) : (
-              grouped && (
+              (grouped || savedGroups) && (
                 <div className="review-requirements">
                   <span className={pure ? 'met' : ''}>
                     {pure ? '✓' : '○'} Pure sequence
@@ -153,7 +158,9 @@ export function RoundHands({
               {groups.map((cards, j) => (
                 <div className={`review-group group-${infos[j].kind}`} key={j}>
                   <div className="review-group-label">
-                    <strong>{grouped ? infos[j].label : 'Final hand'}</strong>
+                    <strong>
+                      {grouped || savedGroups ? infos[j].label : 'Final hand'}
+                    </strong>
                     <span>{cards.length} cards</span>
                   </div>
                   <div className="review-cards">
@@ -163,7 +170,7 @@ export function RoundHands({
                       </div>
                     ))}
                   </div>
-                  {grouped && !infos[j].valid && (
+                  {(grouped || savedGroups) && !infos[j].valid && (
                     <small>
                       {cards.reduce((n, c) => n + value(c, game.wild.r), 0)}{' '}
                       card points · incomplete group

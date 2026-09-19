@@ -16,6 +16,7 @@ import {
   type CSSProperties,
 } from 'react';
 import { createPortal, flushSync } from 'react-dom';
+import { useGroupMotion } from '@/hooks/use-group-motion';
 import { useCardLayer } from '@/hooks/use-card-layer';
 import { useViewportStage, useHandFit } from '@/hooks/use-table-layout';
 import { preloadDeck } from '@/lib/card-preload';
@@ -35,6 +36,10 @@ import { useCardFlight } from '@/hooks/use-card-flight';
 import { opponentTransition, visibleDiscard } from '@/lib/transition';
 import {
   describeGroup,
+  initialHandOrder,
+  ensureDiscardGroup,
+  reserveInGroup,
+  DISCARD_GROUP,
   splitGroups,
   removeGroup,
   stableArrangement,
@@ -153,14 +158,10 @@ export default function Home() {
       handRound.current = key;
       const hand = next.players[next.me]?.hand || [];
       setOrder(
-        next.expert
-          ? [GROUP + 'expert', ...hand.map((c) => c.id)]
-          : [
-              GROUP + 'a',
-              ...hand.slice(0, 7).map((c) => c.id),
-              GROUP + 'b',
-              ...hand.slice(7).map((c) => c.id),
-            ],
+        initialHandOrder(
+          hand.map((c) => c.id),
+          next.expert,
+        ),
       );
     } else motionRef.current?.capture();
     opponentBefore.current = Array.from(
@@ -369,6 +370,12 @@ export default function Home() {
         body: JSON.stringify({
           action,
           cardId,
+          groups:
+            action === 'declare' && gRef.current?.expert
+              ? splitGroups(motionRef.current?.getOrder() || order).map(
+                  (group) => group.ids.filter((id) => id !== INCOMING),
+                )
+              : undefined,
           expert,
           decks,
           maxScore,
@@ -457,24 +464,18 @@ export default function Home() {
     setOrder((old) => {
       if (handRound.current !== key) {
         handRound.current = key;
-        if (g?.expert) return [GROUP + 'expert', ...hand.map((c) => c.id)];
-        return [
-          GROUP + 'a',
-          ...hand.slice(0, 7).map((c) => c.id),
-          GROUP + 'b',
-          ...hand.slice(7).map((c) => c.id),
-        ];
+        return initialHandOrder(
+          hand.map((c) => c.id),
+          !!g?.expert,
+        );
       }
       const retained = old.filter(
         (id) => isGroup(id) || id === INCOMING || hand.some((c) => c.id === id),
       );
-      const next = pruneEmptiedGroups(
-        [
-          ...(retained.some(isGroup) ? retained : [GROUP + 'a']),
-          ...hand.filter((c) => !retained.includes(c.id)).map((c) => c.id),
-        ],
-        old,
-      );
+      let next = retained.some(isGroup) ? retained : [GROUP + 'a'];
+      for (const card of hand)
+        if (!next.includes(card.id)) next = reserveInGroup(next, card.id);
+      next = ensureDiscardGroup(pruneEmptiedGroups(next, old));
       return next.join('|') === old.join('|') ? old : next;
     });
   }, [handKey, g?.code, g?.match, g?.round, g?.expert]);
@@ -549,6 +550,15 @@ export default function Home() {
     },
   );
   motionRef.current = motion;
+  const groupMotion = useGroupMotion(
+    motion.hand,
+    order,
+    (next) => {
+      motion.reset();
+      setOrder(next);
+    },
+    `${g?.code}/${g?.match}/${g?.round}/${g?.status}`,
+  );
   const drag = motion.drag;
   const discardFace = landingDiscard
     ? landingDiscard.card
@@ -688,9 +698,17 @@ export default function Home() {
   return (
     <main
       className={`shell casino ${g ? 'game-shell' : ''}`}
-      onPointerMove={motion.move}
-      onPointerUp={(e) => void motion.end(e)}
-      onPointerCancel={(e) => void motion.end(e, true)}
+      onPointerMove={(e) =>
+        groupMotion.isActive() ? groupMotion.move(e) : motion.move(e)
+      }
+      onPointerUp={(e) =>
+        groupMotion.isActive() ? groupMotion.end(e) : void motion.end(e)
+      }
+      onPointerCancel={(e) =>
+        groupMotion.isActive()
+          ? groupMotion.end(e, true)
+          : void motion.end(e, true)
+      }
       onClickCapture={(e) => {
         motion.click(e);
         const button = (e.target as HTMLElement).closest('button');
@@ -1036,7 +1054,8 @@ export default function Home() {
                       <span>✦</span>
                     </div>
                     <span>
-                      Draw pile <small>{g.remaining}</small>
+                      Draw pile{' '}
+                      <small className="stock-count">{g.remaining} left</small>
                     </span>
                   </button>
                   <button
@@ -1056,6 +1075,7 @@ export default function Home() {
                       className={`playing-card ${discardFace?.s && discardFace.s % 2 ? 'red' : ''} ${!discardFace ? 'empty-discard' : ''}`}
                     >
                       <DiscardStack
+                        wild={g.wild.r}
                         face={discardFace}
                         top={g.pile[0]}
                         underneath={g.underDiscard}
@@ -1086,6 +1106,7 @@ export default function Home() {
                         className="quiet"
                         disabled={
                           !hand.length ||
+                          groupMotion.dragging ||
                           handGroups.length >= hand.length + 1 ||
                           (!!drag && !drag.settling) ||
                           arranging
@@ -1103,6 +1124,7 @@ export default function Home() {
                           aria-busy={arranging}
                           disabled={
                             !hand.length ||
+                            groupMotion.dragging ||
                             (!!drag && !drag.settling) ||
                             arranging
                           }
@@ -1141,10 +1163,27 @@ export default function Home() {
                           }}
                           className={`hand-group ${`group-${info.kind}`} ${group.cards.length > 7 ? 'group-scroll' : ''}`}
                         >
-                          <div className="group-label">
+                          <div
+                            className="group-label"
+                            role="button"
+                            tabIndex={0}
+                            aria-label={`Move ${group.id === DISCARD_GROUP ? 'discard card' : info.label} group. Drag or use arrow keys.`}
+                            onPointerDown={(e) => {
+                              if (!motion.isDragging() && !arranging)
+                                groupMotion.start(e, group.id);
+                            }}
+                            onKeyDown={(e) => {
+                              if (!motion.isDragging())
+                                groupMotion.keyboard(e, group.id);
+                            }}
+                          >
                             <span title={info.label}>
                               {info.valid ? '✓ ' : ''}
-                              {info.label}
+                              {group.id === DISCARD_GROUP
+                                ? 'Discard card'
+                                : group.id === GROUP + 'loose'
+                                  ? 'Ungrouped'
+                                  : info.label}
                             </span>
                             <div className="group-label-tools">
                               <small>
@@ -1158,6 +1197,7 @@ export default function Home() {
                                 aria-label={`Remove ${info.label.toLowerCase()} group; keep its cards`}
                                 disabled={
                                   handGroups.length < 2 ||
+                                  groupMotion.dragging ||
                                   (!!drag && !drag.settling) ||
                                   arranging
                                 }
@@ -1177,7 +1217,10 @@ export default function Home() {
                                 key={c.id}
                                 className={`playing-card hand-card ${c.s % 2 ? 'red' : ''} ${drag?.id === c.id || departingCard === c.id ? 'drag-source' : ''} ${c.id === INCOMING ? 'incoming-slot' : ''}`}
                                 onPointerDown={(e) => {
-                                  if (c.id !== INCOMING)
+                                  if (
+                                    c.id !== INCOMING &&
+                                    !groupMotion.isActive()
+                                  )
                                     motion.start(e, 'hand', c.id, c);
                                 }}
                               >
@@ -1186,7 +1229,9 @@ export default function Home() {
                             ))}
                             {!group.cards.length && (
                               <span className="empty-group">
-                                Drop a card here
+                                {group.id === DISCARD_GROUP
+                                  ? 'One card only'
+                                  : 'Drop a card here'}
                               </span>
                             )}
                           </div>

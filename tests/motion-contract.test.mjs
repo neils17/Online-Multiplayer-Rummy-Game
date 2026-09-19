@@ -8,7 +8,11 @@ export const useState=x=>{const i=states.push(x)-1;return[x,v=>states[i]=typeof 
 export const useEffect=()=>{}; export const useLayoutEffect=()=>{}; export const flushSync=f=>f();`;
 writeFileSync('work/motion-react.mjs', fake);
 await build({
-  entryPoints: ['hooks/use-card-motion.ts', 'hooks/use-card-flight.ts'],
+  entryPoints: [
+    'hooks/use-card-motion.ts',
+    'hooks/use-card-flight.ts',
+    'hooks/use-group-motion.ts',
+  ],
   outdir: 'work/motion-test',
   bundle: true,
   platform: 'node',
@@ -295,7 +299,7 @@ console.log(
   });
   motion.move(event(140, 320, cardElement('a')));
   await motion.end(event(140, 320, cardElement('a')));
-  assert.deepEqual(order, ['~group:a', 'b', 'a', 'c']);
+  assert.deepEqual(order, ['~group:a', 'b', 'a', 'c', '~group:discard']);
   await new Promise((r) => setTimeout(r, 510));
   console.log(
     'PASS: a half-scale mobile hand inserts at the correct physical pointer position.',
@@ -440,18 +444,85 @@ for (const source of ['draw', 'open']) {
   );
   motion.move(event(5, 340, target));
   await new Promise((r) => setTimeout(r, 20));
-  assert.deepEqual(order, ['~group:a', INCOMING, 'a', 'b', 'c']);
+  assert.deepEqual(
+    order.filter(
+      (id) => !id.startsWith('~group:draw') && id !== '~group:discard',
+    ),
+    ['~group:a', INCOMING, 'a', 'b', 'c'],
+  );
   motion.move(event(240, 340, target));
   await new Promise((r) => setTimeout(r, 20));
-  assert.deepEqual(order, ['~group:a', 'a', 'b', 'c', INCOMING]);
+  assert.deepEqual(
+    order.filter(
+      (id) => !id.startsWith('~group:draw') && id !== '~group:discard',
+    ),
+    ['~group:a', 'a', 'b', 'c', INCOMING],
+  );
   motion.move(event(280, 150, target));
   await new Promise((r) => setTimeout(r, 20));
   assert.ok(!order.includes(INCOMING), 'leaving hand closes preview gap');
   motion.move(event(5, 340, target));
   await new Promise((r) => setTimeout(r, 20));
   await motion.end(event(5, 340, target));
-  assert.deepEqual(order, ['~group:a', 'new', 'a', 'b', 'c']);
+  assert.deepEqual(
+    order.filter(
+      (id) => !id.startsWith('~group:draw') && id !== '~group:discard',
+    ),
+    ['~group:a', 'new', 'a', 'b', 'c'],
+  );
 }
 console.log(
   'PASS: draw/open cards preview moving hand slots, close gaps outside hand and retain chosen position on release.',
 );
+
+const { useGroupMotion } =
+  await import('../work/motion-test/use-group-motion.js');
+{
+  let order = ['~group:a', 'a', '~group:b', 'b', '~group:c', 'c'];
+  const nodes = ['~group:a', '~group:b', '~group:c'].map((id) => {
+    const node = element(rect(0, 300, 100, 160), { handGroup: id });
+    node.offsetWidth = 100;
+    node.getBoundingClientRect = () =>
+      rect(
+        order.filter((x) => x.startsWith('~')).indexOf(id) * 110,
+        300,
+        100,
+        160,
+      );
+    return node;
+  });
+  const hand = { current: { querySelectorAll: () => nodes } };
+  const motion = useGroupMotion(
+    hand,
+    order,
+    (next) => (order = next),
+    'groups',
+  );
+  const header = { setPointerCapture() {} };
+  const pointer = (x) => ({
+    ...event(x, 310, header),
+    target: { closest: () => null },
+    preventDefault() {},
+    stopPropagation() {},
+  });
+  motion.start(pointer(10), '~group:a');
+  motion.move(pointer(250));
+  await new Promise((r) => setTimeout(r, 20));
+  assert.deepEqual(order, ['~group:b', 'b', '~group:c', 'c', '~group:a', 'a']);
+  motion.end(pointer(250));
+  assert.equal(motion.isActive(), false);
+  assert.equal(nodes[0].style.translate, 'none');
+  assert.ok(!nodes[0].dataset.groupDragging);
+  motion.start(pointer(230), '~group:a');
+  motion.move(pointer(10));
+  await new Promise((r) => setTimeout(r, 20));
+  motion.end(pointer(10), true);
+  assert.deepEqual(
+    order,
+    ['~group:b', 'b', '~group:c', 'c', '~group:a', 'a'],
+    'cancelling restores whole group order',
+  );
+  console.log(
+    'PASS: header dragging reorders whole groups, keeps membership, settles cleanly and restores order on cancellation.',
+  );
+}

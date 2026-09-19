@@ -6,6 +6,7 @@ import {
   deal,
   gameOptions,
   assertDeckIntegrity,
+  recordDeclaredGroups,
   type Game,
 } from '@/lib/game';
 import { advanceBot, scheduleBot } from '@/lib/bot';
@@ -46,6 +47,7 @@ export async function POST(req: Request) {
   try {
     const b = (await req.json()) as {
       action: string;
+      groups?: unknown;
       name?: string;
       code?: string;
       token?: string;
@@ -156,8 +158,12 @@ export async function POST(req: Request) {
             (b.round !== undefined && b.round !== g.round))
         )
           return reply({ token, game: view(g, i, code, row.version) });
-        if (b.action !== 'poll') act(g, i, b.action, b.cardId);
-        else botMoved = advanceBot(g);
+        if (b.action !== 'poll') {
+          const previousHand = [...g.players[i].hand];
+          act(g, i, b.action, b.cardId);
+          if (b.action === 'declare')
+            recordDeclaredGroups(g, i, previousHand, b.groups);
+        } else botMoved = advanceBot(g);
       }
       if (b.action !== 'poll') scheduleBot(g);
       if (b.action !== 'poll' || botMoved) {

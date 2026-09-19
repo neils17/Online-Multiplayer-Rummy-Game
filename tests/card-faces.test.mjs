@@ -82,3 +82,30 @@ assert.ok(
 console.log(
   'PASS: fitted printed-joker label, pre-mounted discard underneath and hidden lifted card.',
 );
+const openingWild = renderToStaticMarkup(
+  React.createElement(DiscardStack, {
+    face: { id: 'open', r: 8, s: 0 },
+    wild: 8,
+  }),
+);
+assert.ok(
+  openingWild.includes('wild-marker'),
+  'opening wild-rank discard has W',
+);
+const openingPrinted = renderToStaticMarkup(
+  React.createElement(DiscardStack, {
+    face: { id: 'j0', r: 0, s: 0 },
+    wild: 8,
+  }),
+);
+assert.ok(
+  openingPrinted.includes('wild-marker'),
+  'opening printed joker has W',
+);
+const droppedFace = renderToStaticMarkup(
+  React.createElement(DiscardStack, {
+    face: { id: 'j0', r: 8, s: 0, printed: true, naturalOnly: true },
+    wild: 8,
+  }),
+);
+assert.ok(!droppedFace.includes('wild-marker'), 'dropped joker has no W');

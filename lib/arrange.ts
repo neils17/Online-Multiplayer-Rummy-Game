@@ -1,5 +1,46 @@
 import { isWild, meld, value, naturalCompletion, type Card } from './game';
 export const GROUP = '~group:';
+export const DISCARD_GROUP = GROUP + 'discard';
+export function initialHandOrder(ids: string[], expert: boolean) {
+  return expert
+    ? [GROUP + 'loose', ...ids, ...[1, 2, 3, 4].map((i) => GROUP + 'empty' + i)]
+    : ensureDiscardGroup([
+        GROUP + 'a',
+        ...ids.slice(0, 7),
+        GROUP + 'b',
+        ...ids.slice(7),
+      ]);
+}
+export function ensureDiscardGroup(order: string[]) {
+  const groups = splitGroups(order);
+  return groups.length &&
+    !groups.some((g) => g.id === DISCARD_GROUP || g.ids.length < 2)
+    ? [...order, DISCARD_GROUP]
+    : order;
+}
+export function ensureDrawGroup(order: string[]) {
+  if (splitGroups(order).some((g) => !g.ids.length)) return order;
+  let i = 1;
+  while (order.includes(GROUP + 'draw' + i)) i++;
+  return [...order, GROUP + 'draw' + i];
+}
+export function reserveInGroup(order: string[], card: string) {
+  if (order.includes(card)) return order;
+  const next = ensureDrawGroup(order);
+  return moveToGroup(
+    next,
+    card,
+    splitGroups(next).find((g) => !g.ids.length)!.id,
+  );
+}
+export function reorderGroup(order: string[], id: string, index: number) {
+  const groups = splitGroups(order),
+    from = groups.findIndex((g) => g.id === id);
+  if (from < 0 || from === index) return order;
+  const [group] = groups.splice(from, 1);
+  groups.splice(Math.max(0, Math.min(index, groups.length)), 0, group);
+  return groups.flatMap((g) => [g.id, ...g.ids]);
+}
 export const isGroup = (id: string) => id.startsWith(GROUP);
 export function splitGroups(order: string[]) {
   const groups: { id: string; ids: string[] }[] = [];
@@ -18,6 +59,13 @@ export function moveToGroup(
   group: string,
   before?: string,
 ) {
+  if (
+    group === DISCARD_GROUP &&
+    splitGroups(order)
+      .find((g) => g.id === group)
+      ?.ids.some((id) => id !== card)
+  )
+    return order;
   const next = order.filter((id) => id !== card);
   const start = next.indexOf(group);
   if (start < 0) return order;
@@ -43,7 +91,12 @@ export function removeGroup(order: string[], group: string) {
   const index = groups.findIndex((g) => g.id === group);
   if (index < 0 || groups.length < 2) return order;
   const removed = groups.splice(index, 1)[0];
-  groups[Math.max(0, index - 1)].ids.push(...removed.ids);
+  const target =
+    groups[Math.max(0, index - 1)].id === DISCARD_GROUP
+      ? groups.find((g) => g.id !== DISCARD_GROUP)
+      : groups[Math.max(0, index - 1)];
+  if (!target) return order;
+  target.ids.push(...removed.ids);
   return groups.flatMap((g) => [g.id, ...g.ids]);
 }
 function pairKind(cards: Card[], wild: number) {
@@ -305,7 +358,11 @@ export function stableArrangement(
       overlap = 0;
     old.forEach((previous, index) => {
       const count = previous.ids.filter((id) => group.ids.includes(id)).length;
-      if (!taken.has(index) && count > overlap) {
+      if (
+        !taken.has(index) &&
+        count > overlap &&
+        (previous.id !== DISCARD_GROUP || group.ids.length <= 1)
+      ) {
         best = index;
         overlap = count;
       }

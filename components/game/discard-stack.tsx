@@ -5,7 +5,9 @@ export function DiscardStack({
   face,
   top,
   underneath,
+  wild,
 }: {
+  wild?: number;
   face: Card | null;
   top?: Card;
   underneath?: Card | null;
@@ -21,7 +23,7 @@ export function DiscardStack({
           key={card.id}
           style={{ visibility: card.id === face?.id ? 'visible' : 'hidden' }}
         >
-          <CardFace c={card} />
+          <CardFace c={card} w={wild} />
         </div>
       ))}
     </>

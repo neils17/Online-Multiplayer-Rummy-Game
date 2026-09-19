@@ -4503,3 +4503,66 @@ body {
   justify-content: center;
   width: 100%;
 }
+/* Keep the stock count readable and separate from the stacked card edges. */
+.shell.casino.game-shell .pile-button > span {
+  margin-top: 16px;
+}
+.shell.casino.game-shell .pile-button .stock-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #f4dfaa;
+  color: #193f2b;
+  border: 1px solid #b69852;
+  border-radius: 8px;
+  min-width: 54px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+  box-shadow: 0 2px 5px #0003;
+}
+.shell.casino.game-shell .group-label {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.shell.casino.game-shell .group-label:focus-visible {
+  outline: 2px solid #e4c477;
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.shell.casino.game-shell .hand-group[data-group-dragging='true'] {
+  position: relative;
+  z-index: 30;
+  pointer-events: none;
+  box-shadow: 0 12px 24px #0007;
+  border-color: #ead19b;
+}
+.shell.casino.game-shell .hand:has([data-group-dragging='true']) {
+  overflow: visible;
+}
+.shell.casino.game-shell .pile-item > span {
+  margin-top: 10px;
+  min-height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.shell.casino.game-shell .table.in-game {
+  grid-template-rows: 26px 50px 32px minmax(174px, 1fr) minmax(200px, 1.2fr);
+}
+:root[data-layout='portrait'] .shell.casino.game-shell .table.in-game {
+  grid-template-rows: 28px 90px 40px minmax(180px, 1fr) minmax(290px, 1.7fr);
+}
+.shell.casino.game-shell.expert-mode .hand-group {
+  padding: 4px 6px;
+  min-width: 64px;
+  border: 2px solid var(--group-color);
+  background: var(--group-bg);
+  box-shadow: 0 3px 0 #0001;
+}
+.shell.casino.game-shell.expert-mode .hand-group.group-empty {
+  border-style: dashed;
+}

@@ -14,6 +14,7 @@ export type RoundResult = {
   winner?: number;
   bonus?: 'sets' | 'sequences';
   discard?: Card;
+  declaredGroups?: { player: number; groups: string[][] };
 };
 export type Player = {
   bot?: boolean;
@@ -476,4 +477,48 @@ export function assertDeckIntegrity(g: Game) {
   }
   if (expected.size)
     throw Error('A card is missing from the deck. Please start a new table.');
+}
+
+// Presentation only: accept each physical hand card exactly once. Never use this
+// client layout to decide whether a declaration is valid.
+export function recordDeclaredGroups(
+  g: Game,
+  player: number,
+  before: Card[],
+  input: unknown,
+) {
+  if (
+    !g.expert ||
+    g.status !== 'ended' ||
+    !Array.isArray(input) ||
+    input.length > 28
+  )
+    return;
+  if (
+    !input.every(
+      (group) =>
+        Array.isArray(group) &&
+        group.length <= 14 &&
+        group.every((id) => typeof id === 'string'),
+    )
+  )
+    return;
+  const groups = input as string[][],
+    ids = groups.flat(),
+    allowed = new Set(before.map((c) => c.id));
+  if (
+    ids.length !== before.length ||
+    new Set(ids).size !== ids.length ||
+    ids.some((id) => !allowed.has(id))
+  )
+    return;
+  const remaining = new Set(g.players[player].hand.map((c) => c.id));
+  const result = g.history.at(-1);
+  if (result)
+    result.declaredGroups = {
+      player,
+      groups: groups
+        .map((group) => group.filter((id) => remaining.has(id)))
+        .filter((group) => group.length),
+    };
 }

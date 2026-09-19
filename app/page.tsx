@@ -475,7 +475,9 @@ export default function Home() {
       let next = retained.some(isGroup) ? retained : [GROUP + 'a'];
       for (const card of hand)
         if (!next.includes(card.id)) next = reserveInGroup(next, card.id);
-      next = ensureDiscardGroup(pruneEmptiedGroups(next, old));
+      next = ensureDiscardGroup(
+        pruneEmptiedGroups(next, old, motionRef.current?.protectedGroup()),
+      );
       return next.join('|') === old.join('|') ? old : next;
     });
   }, [handKey, g?.code, g?.match, g?.round, g?.expert]);

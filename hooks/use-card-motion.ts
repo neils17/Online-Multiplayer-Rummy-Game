@@ -27,6 +27,7 @@ type Gesture = {
   moved: boolean;
   settling: boolean;
   original: string[];
+  createdGroup?: string;
   group?: string;
   sourceGroup?: string;
   zones?: { id: string; rect: DOMRect }[];
@@ -68,7 +69,9 @@ export function useCardMotion(
     );
   }
   function update(next: string[]) {
-    next = ensureDiscardGroup(pruneEmptiedGroups(next, orderRef.current));
+    next = ensureDiscardGroup(
+      pruneEmptiedGroups(next, orderRef.current, active.current?.createdGroup),
+    );
     if (next.join('|') === orderRef.current.join('|')) return;
     snapshot();
     orderRef.current = next;
@@ -156,7 +159,11 @@ export function useCardMotion(
         ? e.currentTarget
         : e.currentTarget.querySelector<HTMLElement>('.playing-card,.deck');
     if (!card) return;
+    const original = [...orderRef.current];
     if (source !== 'hand') update(ensureDrawGroup(orderRef.current));
+    const createdGroup = orderRef.current.find(
+      (id) => id.startsWith('~group:') && !original.includes(id),
+    );
     const origin = card.getBoundingClientRect();
     const d: Gesture = {
       pointerId: e.pointerId,
@@ -170,7 +177,8 @@ export function useCardMotion(
       py: e.clientY,
       moved: false,
       settling: false,
-      original: [...orderRef.current],
+      original,
+      createdGroup,
       sourceGroup:
         e.currentTarget.closest<HTMLElement>('[data-hand-group]')?.dataset
           ?.handGroup,
@@ -277,7 +285,7 @@ export function useCardMotion(
     const base = orderRef.current.filter(
       (id) => !(d.source === 'draw' && id === d.face?.id),
     );
-    update(moveToGroup(base, d.id, group, anchor));
+    update(moveToGroup(base, d.id, group, anchor, d.createdGroup));
   }
   function move(e: React.PointerEvent<HTMLElement>) {
     const d = active.current;
@@ -291,7 +299,17 @@ export function useCardMotion(
     }
     if (!frame.current) frame.current = requestAnimationFrame(paint);
   }
+  function releaseDrawGroup() {
+    const d = active.current,
+      id = d?.createdGroup;
+    if (!d || !id) return;
+    d.createdGroup = undefined;
+    const group = splitGroups(orderRef.current).find((g) => g.id === id);
+    if (group && !group.ids.length)
+      update(orderRef.current.filter((value) => value !== id));
+  }
   function cleanup() {
+    releaseDrawGroup();
     landingDone.current?.();
     landingDone.current = null;
     cancelAnimationFrame(frame.current);
@@ -443,6 +461,7 @@ export function useCardMotion(
           .filter((c) => c !== id)
           .map((c) => (c === INCOMING ? id : c)),
       );
+      releaseDrawGroup();
       setDrag({ ...d });
       const discard = !cancel
         ? document
@@ -530,6 +549,7 @@ export function useCardMotion(
     end,
     click,
     getOrder: () => orderRef.current,
+    protectedGroup: () => active.current?.createdGroup,
     prepareDiscard: (card: Card) => {
       const d = active.current;
       if (d) {

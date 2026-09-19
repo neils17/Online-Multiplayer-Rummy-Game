@@ -526,3 +526,93 @@ const { useGroupMotion } =
     'PASS: header dragging reorders whole groups, keeps membership, settles cleanly and restores order on cancellation.',
   );
 }
+// A target created for this draw survives every hover, then is retired only
+// after release if the new card landed elsewhere. Test both piles and outcomes.
+for (const source of ['draw', 'open'])
+  for (const useNewGroup of [false, true]) {
+    let order = ['~group:a', 'a', '~group:b', 'b'];
+    const groups = () =>
+      order
+        .filter((id) => id.startsWith('~group:'))
+        .map((id, index) => ({
+          dataset: { handGroup: id },
+          offsetWidth: 160,
+          getBoundingClientRect: () => rect(index * 200, 300, 160, 126),
+          querySelectorAll: () => {
+            const start = order.indexOf(id),
+              next = order.findIndex(
+                (v, i) => i > start && v.startsWith('~group:'),
+              );
+            return order
+              .slice(start + 1, next < 0 ? undefined : next)
+              .map((card, i) => ({
+                ...element(rect(index * 200 + i * 45, 300), { card }),
+                offsetWidth: 90,
+                offsetLeft: i * 45,
+                offsetParent: {
+                  offsetWidth: 160,
+                  getBoundingClientRect: () => rect(index * 200, 300, 160, 126),
+                },
+              }));
+          },
+        }));
+    const motion = useCardMotion(
+      order,
+      (next) => (order = next),
+      async () => ({ id: 'new', r: 4, s: 0 }),
+      async () => false,
+      'temporary-target',
+    );
+    motion.hand.current = {
+      getBoundingClientRect: () => handRect,
+      querySelectorAll: (selector) =>
+        selector === '[data-card]'
+          ? groups().flatMap((g) => g.querySelectorAll())
+          : groups(),
+    };
+    motion.ghost.current = element(pileRect);
+    const target = {
+      querySelector: () => element(pileRect),
+      closest: () => ({ setPointerCapture() {} }),
+    };
+    hitDiscard = false;
+    motion.start(
+      event(280, 120, target),
+      source,
+      INCOMING,
+      source === 'open' ? { id: 'new', r: 4, s: 0 } : null,
+    );
+    const created = motion.protectedGroup();
+    assert.ok(created);
+    motion.move(event(405, 340, target));
+    await new Promise((r) => setTimeout(r, 20));
+    assert.ok(order.includes(INCOMING));
+    motion.move(event(600, 160, target));
+    await new Promise((r) => setTimeout(r, 20));
+    assert.ok(
+      order.includes(created),
+      'new empty group survives leaving the hand',
+    );
+    motion.move(event(5, 340, target));
+    await new Promise((r) => setTimeout(r, 20));
+    assert.ok(
+      order.includes(created),
+      'new empty group survives hovering another group',
+    );
+    if (useNewGroup) {
+      motion.move(event(405, 340, target));
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    await motion.end(event(useNewGroup ? 405 : 5, 340, target));
+    assert.equal(
+      order.includes(created),
+      useNewGroup,
+      'only unused temporary target is removed after release',
+    );
+    assert.equal(order.filter((id) => id === 'new').length, 1);
+    assert.equal(motion.protectedGroup(), undefined);
+    assert.ok(order.includes('~group:b'), 'unrelated groups remain');
+  }
+console.log(
+  'PASS: temporary draw/open groups survive hover-out and re-entry; release keeps occupied targets and removes only unused temporary targets.',
+);

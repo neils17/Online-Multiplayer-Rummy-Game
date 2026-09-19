@@ -58,6 +58,7 @@ export function moveToGroup(
   card: string,
   group: string,
   before?: string,
+  preserveEmpty?: string,
 ) {
   if (
     group === DISCARD_GROUP &&
@@ -73,17 +74,23 @@ export function moveToGroup(
   if (end < 0) end = next.length;
   const anchor = before ? next.indexOf(before) : -1;
   next.splice(anchor > start && anchor < end ? anchor : end, 0, card);
-  return pruneEmptiedGroups(next, order);
+  return pruneEmptiedGroups(next, order, preserveEmpty);
 }
 // Preserve intentionally created empty targets, but remove a group that lost its last card.
-export function pruneEmptiedGroups(next: string[], previous: string[]) {
+export function pruneEmptiedGroups(
+  next: string[],
+  previous: string[],
+  preserveEmpty?: string,
+) {
   const occupied = new Set(
     splitGroups(previous)
       .filter((g) => g.ids.length)
       .map((g) => g.id),
   );
   return splitGroups(next)
-    .filter((g) => g.ids.length || !occupied.has(g.id))
+    .filter(
+      (g) => g.ids.length || g.id === preserveEmpty || !occupied.has(g.id),
+    )
     .flatMap((g) => [g.id, ...g.ids]);
 }
 export function removeGroup(order: string[], group: string) {

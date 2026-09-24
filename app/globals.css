@@ -4566,3 +4566,105 @@ body {
 .shell.casino.game-shell.expert-mode .hand-group.group-empty {
   border-style: dashed;
 }
+/* A dedicated fixed discard column, outside the reorderable group rail. */
+.shell.casino.game-shell .hand-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 106px;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  align-items: center;
+}
+.shell.casino.game-shell .hand-layout > .hand {
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+}
+.shell.casino.game-shell .fixed-discard {
+  box-sizing: border-box;
+  width: 106px;
+  padding: 9px 7px;
+  border: 2px solid #6aafe7;
+  border-radius: 12px;
+  background: linear-gradient(155deg, #1b4667, #102f49);
+  box-shadow:
+    inset 0 1px 0 #9dd5ff33,
+    0 3px 9px #0003;
+  align-self: center;
+  text-align: center;
+}
+.shell.casino.game-shell .fixed-discard .discard-slot-title {
+  display: block;
+  font: 700 15px/22px sans-serif;
+  color: #e0f2ff;
+  white-space: nowrap;
+  overflow: visible;
+  margin: 0 0 7px;
+}
+.shell.casino.game-shell .fixed-discard .group-cards {
+  justify-content: center;
+  height: 126px;
+}
+.shell.casino.game-shell .fixed-discard .hand-card {
+  width: 90px;
+  height: 126px;
+  flex-basis: 90px;
+  margin: 0;
+}
+.shell.casino.game-shell .fixed-discard .empty-group {
+  width: 90px;
+  color: #d5eaff;
+}
+.shell.casino.game-shell .fixed-discard[data-drop-target='true'] {
+  border-color: #c4e7ff;
+  box-shadow: 0 0 0 3px #79baff44;
+}
+.score-leave {
+  justify-self: end;
+  margin: -2px 0 2px;
+}
+.review-view-toggle {
+  display: flex;
+  gap: 6px;
+  margin: 8px 0;
+}
+.review-view-toggle button {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+.review-view-toggle button[aria-pressed='true'] {
+  background: #d6bb78;
+  color: #153326;
+}
+.shell.casino.game-shell .hand-layout {
+  container-type: size;
+}
+.shell.casino.game-shell .fixed-discard {
+  --slot-card-width: clamp(32px, calc((100cqh - 56px) / 1.4), 90px);
+}
+.shell.casino.game-shell .fixed-discard .group-cards {
+  height: calc(var(--slot-card-width) * 1.4);
+}
+.shell.casino.game-shell .fixed-discard .hand-card {
+  width: var(--slot-card-width);
+  height: calc(var(--slot-card-width) * 1.4);
+  flex-basis: var(--slot-card-width);
+}
+.shell.casino.game-shell .hand-layout {
+  grid-row: 2;
+  grid-template-rows: minmax(0, 1fr);
+}
+.shell.casino.game-shell .hand-layout > .hand {
+  grid-row: 1;
+  grid-column: 1;
+}
+.shell.casino.game-shell .hand-layout > .fixed-discard {
+  grid-row: 1;
+  grid-column: 2;
+}
+.review-view-toggle button[aria-pressed='false'] {
+  background: transparent;
+  color: #ddcfad;
+  border: 1px solid #8d805c;
+}

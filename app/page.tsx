@@ -52,6 +52,7 @@ import { useCardMotion, INCOMING } from '@/hooks/use-card-motion';
 import {
   type Card,
   type RoundResult,
+  type HandLayout,
   rank,
   suit,
   dropRestriction,
@@ -75,6 +76,7 @@ type View = {
     count: number;
     hand: Card[];
     draws: number;
+    layout?: HandLayout;
   }[];
   me: number;
   status: string;
@@ -114,6 +116,7 @@ export default function Home() {
   const [liftedDiscard, setLiftedDiscard] = useState<string | null>(null);
   const [order, setOrder] = useState<string[]>([]);
   const groupCounter = useRef(0);
+  const handRail = useRef<HTMLDivElement>(null);
   const [arranging, setArranging] = useState(false);
   const arrangeWorker = useRef<Worker | null>(null);
   useEffect(() => () => arrangeWorker.current?.terminate(), []);
@@ -157,11 +160,21 @@ export default function Home() {
       motionRef.current?.reset();
       handRound.current = key;
       const hand = next.players[next.me]?.hand || [];
+      const saved = next.players[next.me]?.layout;
       setOrder(
-        initialHandOrder(
-          hand.map((c) => c.id),
-          next.expert,
-        ),
+        saved
+          ? ensureDiscardGroup([
+              ...saved.groups.flatMap((ids, i) => [
+                GROUP + 'saved' + i,
+                ...ids,
+              ]),
+              DISCARD_GROUP,
+              ...(saved.discardId ? [saved.discardId] : []),
+            ])
+          : initialHandOrder(
+              hand.map((c) => c.id),
+              next.expert,
+            ),
       );
     } else motionRef.current?.capture();
     opponentBefore.current = Array.from(
@@ -370,11 +383,16 @@ export default function Home() {
         body: JSON.stringify({
           action,
           cardId,
-          groups:
-            action === 'declare' && gRef.current?.expert
-              ? splitGroups(motionRef.current?.getOrder() || order).map(
-                  (group) => group.ids.filter((id) => id !== INCOMING),
-                )
+          layout:
+            gRef.current && !motionRef.current?.isDragging()
+              ? {
+                  groups: splitGroups(motionRef.current?.getOrder() || order)
+                    .filter((g) => g.id !== DISCARD_GROUP)
+                    .map((g) => g.ids.filter((id) => id !== INCOMING)),
+                  discardId: splitGroups(
+                    motionRef.current?.getOrder() || order,
+                  ).find((g) => g.id === DISCARD_GROUP)?.ids[0],
+                }
               : undefined,
           expert,
           decks,
@@ -481,6 +499,13 @@ export default function Home() {
       return next.join('|') === old.join('|') ? old : next;
     });
   }, [handKey, g?.code, g?.match, g?.round, g?.expert]);
+  useEffect(() => {
+    if (!g || !seat || motionRef.current?.isDragging()) return;
+    const timer = setTimeout(() => {
+      if (!motionRef.current?.isDragging()) void call('poll', undefined, seat);
+    }, 180);
+    return () => clearTimeout(timer);
+  }, [order, seat, g?.status]);
   const mine = !!g && g.turn === g.me && g.status === 'playing';
   const mayDiscard = mine && g?.phase === 'discard';
   const other = g?.players[1 - g.me];
@@ -588,8 +613,10 @@ export default function Home() {
       ),
   }));
   const handFit = useHandFit(
-    motion.hand,
-    handGroups.map((group) => group.cards.length),
+    handRail,
+    handGroups
+      .filter((g) => g.id !== DISCARD_GROUP)
+      .map((group) => group.cards.length),
     false,
   );
   const groupInfo = handGroups.map((group) =>
@@ -616,7 +643,12 @@ export default function Home() {
       while (gRef.current) {
         const current = gRef.current;
         if (current.expert) break;
-        const currentHand = current.players[current.me].hand;
+        const slot = splitGroups(motion.getOrder()).find(
+          (g) => g.id === DISCARD_GROUP,
+        )?.ids[0];
+        const currentHand = current.players[current.me].hand.filter(
+          (c) => c.id !== slot,
+        );
         const fingerprint = JSON.stringify([
           current.code,
           current.round,
@@ -653,19 +685,30 @@ export default function Home() {
           JSON.stringify([
             latest.code,
             latest.round,
-            latest.players[latest.me].hand,
+            latest.players[latest.me].hand.filter((c) => c.id !== slot),
             latest.wild,
             latest.picked,
           ])
         )
           continue;
+        const savedSlot =
+          splitGroups(motion.getOrder()).find((g) => g.id === DISCARD_GROUP)
+            ?.ids || [];
         motion.sort(
-          stableArrangement(
-            groups,
-            latest.players[latest.me].hand,
-            motion.getOrder(),
-            () => GROUP + String(++groupCounter.current),
-          ),
+          ensureDiscardGroup([
+            ...stableArrangement(
+              groups,
+              latest.players[latest.me].hand.filter(
+                (c) => !savedSlot.includes(c.id),
+              ),
+              splitGroups(motion.getOrder())
+                .filter((g) => g.id !== DISCARD_GROUP)
+                .flatMap((g) => [g.id, ...g.ids]),
+              () => GROUP + String(++groupCounter.current),
+            ),
+            DISCARD_GROUP,
+            ...savedSlot,
+          ]),
         );
         break;
       }
@@ -678,8 +721,30 @@ export default function Home() {
     }
   }
   function leave() {
+    const latest = gRef.current;
+    if (latest && seat)
+      void fetch('/api/game', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        keepalive: true,
+        body: JSON.stringify({
+          action: 'leave',
+          ...seat,
+          round: latest.round,
+          match: latest.match,
+          layout: {
+            groups: splitGroups(motionRef.current?.getOrder() || order)
+              .filter((g) => g.id !== DISCARD_GROUP)
+              .map((g) => g.ids.filter((id) => id !== INCOMING)),
+            discardId: splitGroups(motionRef.current?.getOrder() || order).find(
+              (g) => g.id === DISCARD_GROUP,
+            )?.ids[0],
+          },
+        }),
+      }).catch(() => {});
     requestEpoch.current++;
     setScores(false);
+    setRules(false);
     localStorage.removeItem('rummy-seat');
     setSeat(null);
     gRef.current = null;
@@ -1139,7 +1204,7 @@ export default function Home() {
                   </div>
                   <div
                     ref={motion.hand}
-                    className={`hand ${drag && drag.source !== 'hand' ? 'hand-receiving' : ''}`}
+                    className={`hand-layout ${drag && drag.source !== 'hand' ? 'hand-receiving' : ''}`}
                     style={
                       {
                         '--hand-card-width': `${handFit.card}px`,
@@ -1148,98 +1213,140 @@ export default function Home() {
                     }
                     aria-label="Your hand"
                   >
-                    {handGroups.map((group, index) => {
-                      const info = groupInfo[index];
-                      return (
-                        <section
-                          key={group.id}
-                          data-hand-group={group.id}
-                          style={{
-                            width: Math.max(
-                              64,
-                              handFit.card +
-                                Math.max(0, group.cards.length - 1) *
-                                  handFit.step +
-                                14,
-                            ),
-                          }}
-                          className={`hand-group ${`group-${info.kind}`} ${group.cards.length > 7 ? 'group-scroll' : ''}`}
-                        >
-                          <div
-                            className="group-label"
-                            role="button"
-                            tabIndex={0}
-                            aria-label={`Move ${group.id === DISCARD_GROUP ? 'discard card' : info.label} group. Drag or use arrow keys.`}
-                            onPointerDown={(e) => {
-                              if (!motion.isDragging() && !arranging)
-                                groupMotion.start(e, group.id);
+                    <div ref={handRail} className="hand">
+                      {handGroups.map((group, index) => {
+                        if (group.id === DISCARD_GROUP) return null;
+                        const info = groupInfo[index];
+                        return (
+                          <section
+                            key={group.id}
+                            data-hand-group={group.id}
+                            style={{
+                              width: Math.max(
+                                64,
+                                handFit.card +
+                                  Math.max(0, group.cards.length - 1) *
+                                    handFit.step +
+                                  14,
+                              ),
                             }}
-                            onKeyDown={(e) => {
-                              if (!motion.isDragging())
-                                groupMotion.keyboard(e, group.id);
-                            }}
+                            className={`hand-group ${`group-${info.kind}`} ${group.cards.length > 7 ? 'group-scroll' : ''}`}
                           >
-                            <span title={info.label}>
-                              {info.valid ? '✓ ' : ''}
-                              {group.id === DISCARD_GROUP
-                                ? 'Discard card'
-                                : group.id === GROUP + 'loose'
-                                  ? 'Ungrouped'
-                                  : info.label}
-                            </span>
-                            <div className="group-label-tools">
-                              <small>
-                                {
-                                  group.cards.filter((c) => c.id !== INCOMING)
-                                    .length
-                                }
-                              </small>
-                              <button
-                                className="remove-group"
-                                aria-label={`Remove ${info.label.toLowerCase()} group; keep its cards`}
-                                disabled={
-                                  handGroups.length < 2 ||
-                                  groupMotion.dragging ||
-                                  (!!drag && !drag.settling) ||
-                                  arranging
-                                }
-                                onClick={() =>
-                                  motion.sort(removeGroup(order, group.id))
-                                }
-                              >
-                                ×
-                              </button>
-                            </div>
-                          </div>
-                          <div className="group-cards">
-                            {group.cards.map((c) => (
-                              <button
-                                data-card={c.id}
-                                aria-label={`${rank(c.r)} ${suit[c.s]}`}
-                                key={c.id}
-                                className={`playing-card hand-card ${c.s % 2 ? 'red' : ''} ${drag?.id === c.id || departingCard === c.id ? 'drag-source' : ''} ${c.id === INCOMING ? 'incoming-slot' : ''}`}
-                                onPointerDown={(e) => {
-                                  if (
-                                    c.id !== INCOMING &&
-                                    !groupMotion.isActive()
-                                  )
-                                    motion.start(e, 'hand', c.id, c);
-                                }}
-                              >
-                                <Face c={c} w={g.wild.r} />
-                              </button>
-                            ))}
-                            {!group.cards.length && (
-                              <span className="empty-group">
+                            <div
+                              className="group-label"
+                              role="button"
+                              tabIndex={0}
+                              aria-label={`Move ${group.id === DISCARD_GROUP ? 'discard card' : info.label} group. Drag or use arrow keys.`}
+                              onPointerDown={(e) => {
+                                if (
+                                  g.status === 'playing' &&
+                                  !motion.isDragging() &&
+                                  !arranging
+                                )
+                                  groupMotion.start(e, group.id);
+                              }}
+                              onKeyDown={(e) => {
+                                if (
+                                  g.status === 'playing' &&
+                                  !motion.isDragging()
+                                )
+                                  groupMotion.keyboard(e, group.id);
+                              }}
+                            >
+                              <span title={info.label}>
+                                {info.valid ? '✓ ' : ''}
                                 {group.id === DISCARD_GROUP
-                                  ? 'One card only'
-                                  : 'Drop a card here'}
+                                  ? 'Discard card'
+                                  : info.label}
                               </span>
-                            )}
-                          </div>
-                        </section>
-                      );
-                    })}
+                              <div className="group-label-tools">
+                                <small>
+                                  {
+                                    group.cards.filter((c) => c.id !== INCOMING)
+                                      .length
+                                  }
+                                </small>
+                                <button
+                                  className="remove-group"
+                                  aria-label={`Remove ${info.label.toLowerCase()} group; keep its cards`}
+                                  disabled={
+                                    handGroups.filter(
+                                      (group) => group.id !== DISCARD_GROUP,
+                                    ).length < 2 ||
+                                    groupMotion.dragging ||
+                                    (!!drag && !drag.settling) ||
+                                    arranging
+                                  }
+                                  onClick={() =>
+                                    motion.sort(removeGroup(order, group.id))
+                                  }
+                                >
+                                  ×
+                                </button>
+                              </div>
+                            </div>
+                            <div className="group-cards">
+                              {group.cards.map((c) => (
+                                <button
+                                  data-card={c.id}
+                                  aria-label={`${rank(c.r)} ${suit[c.s]}`}
+                                  key={c.id}
+                                  className={`playing-card hand-card ${c.s % 2 ? 'red' : ''} ${drag?.id === c.id || departingCard === c.id ? 'drag-source' : ''} ${c.id === INCOMING ? 'incoming-slot' : ''}`}
+                                  onPointerDown={(e) => {
+                                    if (
+                                      c.id !== INCOMING &&
+                                      !groupMotion.isActive()
+                                    )
+                                      motion.start(e, 'hand', c.id, c);
+                                  }}
+                                >
+                                  <Face c={c} w={g.wild.r} />
+                                </button>
+                              ))}
+                              {!group.cards.length && (
+                                <span className="empty-group">
+                                  {group.id === DISCARD_GROUP
+                                    ? 'One card only'
+                                    : 'Drop a card here'}
+                                </span>
+                              )}
+                            </div>
+                          </section>
+                        );
+                      })}
+                    </div>
+                    <aside
+                      className="fixed-discard"
+                      data-hand-group={DISCARD_GROUP}
+                      aria-label="Discard slot, one card"
+                    >
+                      <strong className="discard-slot-title">Discard</strong>
+                      <div className="group-cards">
+                        {handGroups
+                          .find((group) => group.id === DISCARD_GROUP)
+                          ?.cards.map((c) => (
+                            <button
+                              key={c.id}
+                              data-card={c.id}
+                              aria-label={`${rank(c.r)} ${suit[c.s]}`}
+                              className={`playing-card hand-card ${drag?.id === c.id || departingCard === c.id ? 'drag-source' : ''} ${c.id === INCOMING ? 'incoming-slot' : ''}`}
+                              onPointerDown={(e) => {
+                                if (
+                                  c.id !== INCOMING &&
+                                  !groupMotion.isActive()
+                                )
+                                  motion.start(e, 'hand', c.id, c);
+                              }}
+                            >
+                              <Face c={c} w={g.wild.r} />
+                            </button>
+                          ))}
+                        {!handGroups.find((group) => group.id === DISCARD_GROUP)
+                          ?.cards.length && (
+                          <span className="empty-group">Place one card</span>
+                        )}
+                      </div>
+                    </aside>
                   </div>
                   <div className="group-progress" aria-live="polite">
                     <span
@@ -1289,7 +1396,16 @@ export default function Home() {
                         <>
                           <button
                             disabled={!mayDiscard || hand.length !== 14}
-                            onClick={() => call('declare')}
+                            onClick={() => {
+                              const id = splitGroups(motion.getOrder()).find(
+                                (g) => g.id === DISCARD_GROUP,
+                              )?.ids[0];
+                              if (!id)
+                                setError(
+                                  'Place one card in the Discard slot before declaring.',
+                                );
+                              else void call('declare', id);
+                            }}
                           >
                             Declare hand ↗
                           </button>
@@ -1360,6 +1476,11 @@ export default function Home() {
           <DialogDescription>
             Two-player Indian points rummy · House rules
           </DialogDescription>
+          {g && (
+            <button className="quiet" onClick={leave}>
+              Leave match
+            </button>
+          )}
           <RulesPages page={rulePage} setPage={setRulePage} />
         </DialogContent>
       </Dialog>
@@ -1380,6 +1501,9 @@ export default function Home() {
                 ? `Round ${g.round} · Table results`
                 : 'The scorecard'}
           </DialogTitle>
+          <button className="score-leave quiet" onClick={leave}>
+            Leave match
+          </button>
           <DialogDescription>
             Penalty points · Lower is better
             {g ? ` · ${g.maxScore}-point limit` : ''}
@@ -1541,17 +1665,12 @@ export default function Home() {
               : 'Leaving clears your saved seat on this device. You will not be able to reclaim it. If a round is active, it will be recorded as a drop.'}
           </DialogDescription>
           <button
-            disabled={busy}
+            disabled={busy && confirm !== 'leave'}
             onClick={async () => {
               const a = confirm;
               setConfirm('');
-              if (a === 'leave') {
-                if (g?.status === 'playing') {
-                  const ok = await call('drop');
-                  if (!ok) return;
-                }
-                leave();
-              } else await call(a);
+              if (a === 'leave') leave();
+              else await call(a);
             }}
           >
             {confirm === 'drop' ? 'Drop round' : 'Leave table'}
@@ -1559,6 +1678,11 @@ export default function Home() {
           <button className="quiet" onClick={() => setConfirm('')}>
             Keep playing
           </button>
+          {confirm === 'drop' && (
+            <button className="quiet" onClick={leave}>
+              Leave match
+            </button>
+          )}
         </DialogContent>
       </Dialog>
     </main>

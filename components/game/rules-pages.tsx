@@ -41,9 +41,10 @@ export function RulesPages({
             </p>
             <h3>Declare</h3>
             <p>
-              With 14 cards on your turn, press Declare. The game checks every
-              arrangement and chooses a legal spare card. An incorrect
-              declaration costs 80 points.
+              With 14 cards on your turn, place one card in the blue Discard
+              slot and press Declare. The game checks the remaining 13 cards for
+              a valid winning arrangement. An incorrect declaration costs 80
+              points.
             </p>
             <p>
               Create and edit groups in either mode. Expert mode removes only

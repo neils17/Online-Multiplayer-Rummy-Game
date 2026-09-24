@@ -77,8 +77,8 @@ export function advanceBot(g: Game, now = Date.now()) {
     act(g, i, takeOpen ? 'open' : 'draw');
   } else {
     const discard = chooseBotDiscard(p.hand, g.wild.r, g.picked);
-    const wins = !!winningDiscard(p.hand, g.wild.r, g.picked);
-    act(g, i, wins ? 'declare' : 'discard', discard.id);
+    const winning = winningDiscard(p.hand, g.wild.r, g.picked);
+    act(g, i, winning ? 'declare' : 'discard', winning?.id || discard.id);
   }
   scheduleBot(g, now);
   return true;

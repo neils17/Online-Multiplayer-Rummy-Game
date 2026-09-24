@@ -2,14 +2,25 @@
 import { useEffect, useState } from 'react';
 import ArrangeWorker from '@/lib/arrange.worker?worker';
 import { describeGroup } from '@/lib/arrange';
-import { type Card, type RoundResult, value } from '@/lib/game';
+import {
+  type Card,
+  type RoundResult,
+  type HandLayout,
+  value,
+} from '@/lib/game';
 import { CardFace } from './card-face';
 type ResultGame = {
   code: string;
   round: number;
   message: string;
   wild: Card;
-  players: { name: string; hand: Card[]; score: number; draws: number }[];
+  players: {
+    name: string;
+    hand: Card[];
+    score: number;
+    draws: number;
+    layout?: HandLayout;
+  }[];
   history: RoundResult[];
 };
 export function RoundHands({
@@ -20,6 +31,7 @@ export function RoundHands({
   playerIndex?: number;
 }) {
   const [grouped, setGrouped] = useState<string[][][] | null>(null);
+  const [optimalViews, setOptimalViews] = useState([false, false]);
   const [failed, setFailed] = useState(false);
   const fingerprint = JSON.stringify([
     game.code,
@@ -28,6 +40,7 @@ export function RoundHands({
   ]);
   useEffect(() => {
     setGrouped(null);
+    setOptimalViews([false, false]);
     setFailed(false);
     const worker = new ArrangeWorker();
     let player = 0;
@@ -46,6 +59,7 @@ export function RoundHands({
         worker.postMessage({
           hand: game.players[player].hand,
           wild: game.wild.r,
+          forPoints: true,
         });
       else {
         setGrouped(results);
@@ -56,14 +70,21 @@ export function RoundHands({
       setFailed(true);
       worker.terminate();
     };
-    worker.postMessage({ hand: game.players[0].hand, wild: game.wild.r });
+    worker.postMessage({
+      hand: game.players[0].hand,
+      wild: game.wild.r,
+      forPoints: true,
+    });
     return () => worker.terminate();
   }, [fingerprint]);
   const round = game.history.at(-1);
-  const savedGroups =
-    round?.declaredGroups?.player === playerIndex
+  const showOptimal = optimalViews[playerIndex] || false;
+  const layout =
+    round?.actualLayouts?.[playerIndex] || game.players[playerIndex]?.layout;
+  const actualGroups = layout?.groups ||
+    (round?.declaredGroups?.player === playerIndex
       ? round.declaredGroups.groups
-      : null;
+      : null) || [game.players[playerIndex].hand.map((c) => c.id)];
   return (
     <div className="round-review">
       <div className="round-verdict">
@@ -83,23 +104,58 @@ export function RoundHands({
           )}
         </div>
       </div>
+      <div
+        className="review-view-toggle"
+        role="group"
+        aria-label={`${game.players[playerIndex].name}'s grouping view`}
+      >
+        <button
+          aria-pressed={!showOptimal}
+          onClick={() =>
+            setOptimalViews((old) =>
+              old.map((v, i) => (i === playerIndex ? false : v)),
+            )
+          }
+        >
+          Player’s groups
+        </button>
+        <button
+          aria-pressed={showOptimal}
+          onClick={() =>
+            setOptimalViews((old) =>
+              old.map((v, i) => (i === playerIndex ? true : v)),
+            )
+          }
+        >
+          Optimal for points
+        </button>
+      </div>
       <p className="review-note">
-        {savedGroups
-          ? 'Actual groups at declaration. The winning discard is shown separately; the game checks all possible winning arrangements.'
-          : 'Best available groups for this final hand. Grouping does not change the recorded score.'}
+        {showOptimal
+          ? 'Lowest possible hand penalty. Recorded round points stay unchanged.'
+          : 'The player’s actual groups and card order at the end of the round.'}
       </p>
-      {!grouped && !savedGroups && (
+      {showOptimal && !grouped && (
         <p role="status">
           {failed
-            ? 'Showing final hands. Group analysis is unavailable.'
-            : 'Finding each hand’s best sequences and sets…'}
+            ? 'Optimal analysis unavailable. Showing the player’s groups.'
+            : 'Finding the lowest possible hand penalty…'}
         </p>
       )}
       {game.players.map((p, i) => {
         if (i !== playerIndex) return null;
-        const groups = (savedGroups || grouped?.[i])?.map((ids) =>
-          ids.map((id) => p.hand.find((c) => c.id === id)!),
-        ) || [p.hand];
+        const optimal = showOptimal && grouped?.[i];
+        let ids = optimal || actualGroups;
+        const optimalDiscard =
+          optimal && p.hand.length === 14 ? optimal.at(-1)?.[0] : undefined;
+        if (optimalDiscard) ids = ids.slice(0, -1);
+        const slotId = !optimal ? layout?.discardId : optimalDiscard;
+        const slotCard = p.hand.find((c) => c.id === slotId);
+        const groups = ids.map((group) =>
+          group
+            .map((id) => p.hand.find((c) => c.id === id))
+            .filter((c): c is Card => !!c),
+        );
         const infos = groups.map((cards) => describeGroup(cards, game.wild.r));
         const pure = infos.filter((info) => info.pure).length;
         const sequences = infos.filter((info) => info.sequence).length;
@@ -128,19 +184,17 @@ export function RoundHands({
                 </span>
               </div>
             ) : (
-              (grouped || savedGroups) && (
-                <div className="review-requirements">
-                  <span className={pure ? 'met' : ''}>
-                    {pure ? '✓' : '○'} Pure sequence
-                  </span>
-                  <span className={sequences >= 2 ? 'met' : ''}>
-                    {Math.min(sequences, 2)}/2 sequences
-                  </span>
-                  <span>
-                    {melded}/{p.hand.length} in melds
-                  </span>
-                </div>
-              )
+              <div className="review-requirements">
+                <span className={pure ? 'met' : ''}>
+                  {pure ? '✓' : '○'} Pure sequence
+                </span>
+                <span className={sequences >= 2 ? 'met' : ''}>
+                  {Math.min(sequences, 2)}/2 sequences
+                </span>
+                <span>
+                  {melded}/{p.hand.length} in melds
+                </span>
+              </div>
             )}
             <div className="review-groups">
               {round?.discard && round.winner === i && (
@@ -155,12 +209,22 @@ export function RoundHands({
                   </div>
                 </div>
               )}
+              {slotCard && (
+                <div className="review-group winning-discard">
+                  <div className="review-group-label">
+                    <strong>{optimal ? 'Optimal discard' : 'Discard'}</strong>
+                  </div>
+                  <div className="review-cards">
+                    <div className="playing-card">
+                      <CardFace c={slotCard} w={game.wild.r} />
+                    </div>
+                  </div>
+                </div>
+              )}
               {groups.map((cards, j) => (
                 <div className={`review-group group-${infos[j].kind}`} key={j}>
                   <div className="review-group-label">
-                    <strong>
-                      {grouped || savedGroups ? infos[j].label : 'Final hand'}
-                    </strong>
+                    <strong>{infos[j].label}</strong>
                     <span>{cards.length} cards</span>
                   </div>
                   <div className="review-cards">
@@ -170,7 +234,7 @@ export function RoundHands({
                       </div>
                     ))}
                   </div>
-                  {(grouped || savedGroups) && !infos[j].valid && (
+                  {!infos[j].valid && (
                     <small>
                       {cards.reduce((n, c) => n + value(c, game.wild.r), 0)}{' '}
                       card points · incomplete group

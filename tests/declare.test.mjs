@@ -35,7 +35,10 @@ const make = (hand) => ({
   picked: null,
 });
 assert.equal(winningDiscard([...ready, spare], 10, null)?.id, spare.id);
-for (const selected of [undefined, ready[0].id]) {
+const missing = make([...ready, spare]);
+assert.throws(() => act(missing, 0, 'declare'), /Discard slot/);
+assert.equal(missing.status, 'playing');
+for (const selected of [spare.id]) {
   const g = make([...ready, spare]);
   act(g, 0, 'declare', selected);
   assert.equal(g.status, 'ended');
@@ -47,14 +50,14 @@ for (const selected of [undefined, ready[0].id]) {
 }
 const invalid = make(cs([2, 4, 6, 8, 10, 12, 2, 4, 6, 8, 10, 12, 13, 13], 0));
 const before = structuredClone(invalid.players[0].hand);
-act(invalid, 0, 'declare');
+act(invalid, 0, 'declare', before.at(-1).id);
 assert.equal(invalid.status, 'ended');
 assert.equal(invalid.players[0].score, 87);
 assert.deepEqual(invalid.players[0].hand, before);
 assert.equal(invalid.history.length, 1);
 const restricted = make([...ready, spare]);
 restricted.picked = spare.id;
-act(restricted, 0, 'declare');
+act(restricted, 0, 'declare', spare.id);
 assert.equal(restricted.players[0].score, 7);
 assert.equal(restricted.pile.at(-1).id, spare.id);
 const short = make(ready);
@@ -67,5 +70,13 @@ const beforeDraw = make(ready);
 beforeDraw.phase = 'draw';
 assert.throws(() => act(beforeDraw, 0, 'declare'), /14 cards/);
 console.log(
-  'PASS: unselected declaration, selected card ignored, automatic winning spare, invalid penalty, open draw can be the winning discard, 14-card and turn enforcement.',
+  'PASS: required Discard slot, selected winning discard respected, invalid penalty, open draw can be the winning discard, 14-card and turn enforcement.',
+);
+
+const wrong = make([...ready, spare]);
+act(wrong, 0, 'declare', ready[0].id);
+assert.equal(
+  wrong.players[0].score,
+  87,
+  'wrong selected discard must not be silently replaced by a winning one',
 );

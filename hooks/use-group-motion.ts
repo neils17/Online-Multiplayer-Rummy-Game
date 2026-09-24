@@ -6,7 +6,7 @@ import {
   useEffect,
   type RefObject,
 } from 'react';
-import { reorderGroup, isGroup } from '@/lib/arrange';
+import { reorderGroup, isGroup, DISCARD_GROUP } from '@/lib/arrange';
 
 type Active = {
   id: string;
@@ -35,7 +35,7 @@ export function useGroupMotion(
   const elements = () =>
     Array.from(
       hand.current?.querySelectorAll<HTMLElement>('[data-hand-group]') || [],
-    );
+    ).filter((el) => el.dataset.handGroup !== DISCARD_GROUP);
   current.current = order;
   function clearAnimations() {
     animations.current.forEach((a) => a.cancel());
@@ -184,7 +184,9 @@ export function useGroupMotion(
     if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key))
       return;
     e.preventDefault();
-    const index = current.current.filter(isGroup).indexOf(id);
+    const index = current.current
+      .filter((id) => isGroup(id) && id !== DISCARD_GROUP)
+      .indexOf(id);
     before.current = new Map(
       elements().map((el) => [
         el.dataset.handGroup!,

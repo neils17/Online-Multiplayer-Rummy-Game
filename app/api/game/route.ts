@@ -7,6 +7,8 @@ import {
   gameOptions,
   assertDeckIntegrity,
   recordDeclaredGroups,
+  saveLayout,
+  reconcileLayout,
   type Game,
 } from '@/lib/game';
 import { advanceBot, scheduleBot } from '@/lib/bot';
@@ -39,6 +41,7 @@ function view(g: Game, i: number, code: string, revision = 0) {
       count: p.hand.length,
       hand: i === j || g.status === 'ended' ? p.hand : [],
       draws: p.draws,
+      layout: i === j || g.status === 'ended' ? reconcileLayout(p) : undefined,
     })),
     me: i,
   };
@@ -48,6 +51,7 @@ export async function POST(req: Request) {
     const b = (await req.json()) as {
       action: string;
       groups?: unknown;
+      layout?: unknown;
       name?: string;
       code?: string;
       token?: string;
@@ -136,6 +140,7 @@ export async function POST(req: Request) {
       let i = g.players.findIndex((p) => p.token === b.token);
       let token = b.token;
       let botMoved = false;
+      let layoutChanged = false;
       if (b.action === 'join' && i < 0) {
         if (g.players.length === 2)
           return reply({ error: 'This table already has two players.' }, 409);
@@ -158,15 +163,25 @@ export async function POST(req: Request) {
             (b.round !== undefined && b.round !== g.round))
         )
           return reply({ token, game: view(g, i, code, row.version) });
-        if (b.action !== 'poll') {
-          const previousHand = [...g.players[i].hand];
-          act(g, i, b.action, b.cardId);
-          if (b.action === 'declare')
-            recordDeclaredGroups(g, i, previousHand, b.groups);
-        } else botMoved = advanceBot(g);
+        const sameRound = b.round === g.round && b.match === g.match;
+        if (sameRound) layoutChanged = saveLayout(g, i, b.layout);
+        if (
+          b.action === 'declare' &&
+          (!b.cardId || g.players[i].layout?.discardId !== b.cardId)
+        )
+          throw Error('Place one card in the Discard slot before declaring.');
+        if (b.action !== 'poll') act(g, i, b.action, b.cardId);
+        else botMoved = advanceBot(g);
+        g.players.forEach((p) => {
+          p.layout = reconcileLayout(p);
+        });
+        if (g.status === 'ended' && g.history.length)
+          g.history.at(-1)!.actualLayouts = g.players.map((p) =>
+            reconcileLayout(p),
+          );
       }
       if (b.action !== 'poll') scheduleBot(g);
-      if (b.action !== 'poll' || botMoved) {
+      if (b.action !== 'poll' || botMoved || layoutChanged) {
         assertDeckIntegrity(g);
         const changed = await db
           .update(rooms)
@@ -200,7 +215,8 @@ export async function POST(req: Request) {
           g,
           i,
           code,
-          row.version + (b.action !== 'poll' || botMoved ? 1 : 0),
+          row.version +
+            (b.action !== 'poll' || botMoved || layoutChanged ? 1 : 0),
         ),
       });
     }

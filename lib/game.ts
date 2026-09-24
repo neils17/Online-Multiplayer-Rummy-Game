@@ -5,7 +5,9 @@ export type Card = {
   naturalOnly?: boolean;
   printed?: boolean;
 };
+export type HandLayout = { groups: string[][]; discardId?: string };
 export type RoundResult = {
+  actualLayouts?: HandLayout[];
   round: number;
   points: number[];
   message: string;
@@ -17,6 +19,7 @@ export type RoundResult = {
   declaredGroups?: { player: number; groups: string[][] };
 };
 export type Player = {
+  layout?: HandLayout;
   bot?: boolean;
   name: string;
   token: string;
@@ -106,6 +109,14 @@ export function deal(g: Game) {
   g.players.forEach((p) => {
     p.hand = d.splice(0, 13);
     p.draws = 0;
+    p.layout = {
+      groups: g.expert
+        ? [p.hand.map((c) => c.id), [], [], [], []]
+        : [
+            p.hand.slice(0, 7).map((c) => c.id),
+            p.hand.slice(7).map((c) => c.id),
+          ],
+    };
   });
   // The opening card was dealt, not discarded by a player: keep it wild.
   g.pile = d.splice(0, 1);
@@ -294,6 +305,7 @@ export function finish(
         : 1
     : null;
   g.history.push({
+    actualLayouts: g.players.map((p) => reconcileLayout(p)),
     round: g.round,
     points: g.players.map((_, i) => (i === loser ? points : 0)),
     message: g.message,
@@ -346,6 +358,16 @@ export function winningDiscard(
   return hand.find((_, i) => valid(full ^ (1 << i), 0, 0)) || null;
 }
 export function act(g: Game, i: number, a: string, cardId?: string) {
+  if (a === 'leave') {
+    if (g.status === 'playing')
+      finish(
+        g,
+        i,
+        g.players[i].draws ? 40 : 20,
+        `${g.players[i].name} left the match.`,
+      );
+    return;
+  }
   if (a === 'restart' || a === 'next') {
     if (g.status !== 'ended') throw Error('Finish this round first.');
     if (a === 'restart' && !g.matchOver)
@@ -396,7 +418,17 @@ export function act(g: Game, i: number, a: string, cardId?: string) {
   if (a === 'declare') {
     if (g.phase !== 'discard' || p.hand.length !== 14)
       throw Error('Draw to 14 cards before declaring.');
-    const spare = winningDiscard(p.hand, g.wild.r, g.picked);
+    if (!cardId)
+      throw Error('Place one card in the Discard slot before declaring.');
+    const selected = p.hand.find((c) => c.id === cardId);
+    if (!selected)
+      throw Error('The Discard slot card is no longer in your hand.');
+    const spare = analyze(
+      p.hand.filter((c) => c.id !== cardId),
+      g.wild.r,
+    ).valid
+      ? selected
+      : null;
     if (spare) {
       g.pile.push(
         droppedCard(
@@ -521,4 +553,70 @@ export function recordDeclaredGroups(
         .map((group) => group.filter((id) => remaining.has(id)))
         .filter((group) => group.length),
     };
+}
+
+export function reconcileLayout(p: Player): HandLayout {
+  const hand = new Set(p.hand.map((c) => c.id)),
+    seen = new Set<string>();
+  const discardId =
+    p.layout?.discardId && hand.has(p.layout.discardId)
+      ? p.layout.discardId
+      : undefined;
+  if (discardId) seen.add(discardId);
+  const groups = (p.layout?.groups || [p.hand.map((c) => c.id)]).map((group) =>
+    group.filter((id) => {
+      if (!hand.has(id) || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    }),
+  );
+  const missing = p.hand.filter((c) => !seen.has(c.id)).map((c) => c.id);
+  if (missing.length) {
+    const empty = groups.find((g) => !g.length);
+    if (empty) empty.push(...missing);
+    else groups.push(missing);
+  }
+  return { groups, discardId };
+}
+export function saveLayout(g: Game, i: number, input: unknown): boolean {
+  if (!input || typeof input !== 'object') return false;
+  const layout = input as HandLayout;
+  if (
+    !Array.isArray(layout.groups) ||
+    layout.groups.length > 28 ||
+    !layout.groups.every(
+      (group) =>
+        Array.isArray(group) &&
+        group.length <= 14 &&
+        group.every((id) => typeof id === 'string'),
+    )
+  )
+    return false;
+  if (layout.discardId !== undefined && typeof layout.discardId !== 'string')
+    return false;
+  const ids = [
+      ...layout.groups.flat(),
+      ...(layout.discardId ? [layout.discardId] : []),
+    ],
+    hand = g.players[i].hand;
+  if (
+    ids.length !== hand.length ||
+    new Set(ids).size !== ids.length ||
+    ids.some((id) => !hand.some((c) => c.id === id))
+  )
+    return false;
+  const changed =
+    JSON.stringify(g.players[i].layout) !== JSON.stringify(layout);
+  g.players[i].layout = {
+    groups: layout.groups.map((g) => [...g]),
+    discardId: layout.discardId,
+  };
+  if (g.status === 'ended') {
+    const round = g.history.at(-1);
+    if (round) {
+      round.actualLayouts ||= g.players.map((p) => reconcileLayout(p));
+      round.actualLayouts[i] = reconcileLayout(g.players[i]);
+    }
+  }
+  return changed;
 }

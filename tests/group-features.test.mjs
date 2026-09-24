@@ -15,9 +15,9 @@ import {
 import { act, recordDeclaredGroups } from '../lib/game.ts';
 const ids = Array.from({ length: 13 }, (_, i) => 'c' + i);
 const expert = initialHandOrder(ids, true);
-assert.equal(splitGroups(expert).length, 5);
+assert.equal(splitGroups(expert).length, 6);
 assert.deepEqual(splitGroups(expert)[0].ids, ids);
-assert.equal(splitGroups(expert).filter((g) => !g.ids.length).length, 4);
+assert.equal(splitGroups(expert).filter((g) => !g.ids.length).length, 5);
 let order = ensureDiscardGroup([GROUP + 'a', 'a', 'b', GROUP + 'b', 'c', 'd']);
 assert.equal(order.at(-1), DISCARD_GROUP);
 order = moveToGroup(order, 'new', DISCARD_GROUP);
@@ -27,11 +27,26 @@ assert.deepEqual(
   'discard space refuses a second card',
 );
 const withDraw = ensureDrawGroup(order);
-assert.equal(splitGroups(withDraw).at(-1).ids.length, 0);
+assert.equal(
+  splitGroups(withDraw)
+    .filter((g) => g.id !== DISCARD_GROUP)
+    .at(-1).ids.length,
+  0,
+);
 const reserved = reserveInGroup(withDraw, 'incoming');
-assert.deepEqual(splitGroups(reserved).at(-1).ids, ['incoming']);
+assert.deepEqual(
+  splitGroups(reserved)
+    .filter((g) => g.id !== DISCARD_GROUP)
+    .at(-1).ids,
+  ['incoming'],
+);
 const shuffled = reorderGroup(expert, GROUP + 'loose', 4);
-assert.equal(splitGroups(shuffled).at(-1).id, GROUP + 'loose');
+assert.equal(
+  splitGroups(shuffled)
+    .filter((g) => g.id !== DISCARD_GROUP)
+    .at(-1).id,
+  GROUP + 'loose',
+);
 assert.deepEqual(
   shuffled.filter((id) => !id.startsWith(GROUP)),
   ids,
@@ -103,7 +118,7 @@ const g = {
     },
   ],
 };
-act(g, 0, 'declare');
+act(g, 0, 'declare', 'spare');
 assert.equal(g.history[0].bonus, 'sets');
 recordDeclaredGroups(g, 0, hand, groups);
 assert.deepEqual(

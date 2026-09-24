@@ -2,27 +2,35 @@ import { isWild, meld, value, naturalCompletion, type Card } from './game';
 export const GROUP = '~group:';
 export const DISCARD_GROUP = GROUP + 'discard';
 export function initialHandOrder(ids: string[], expert: boolean) {
-  return expert
-    ? [GROUP + 'loose', ...ids, ...[1, 2, 3, 4].map((i) => GROUP + 'empty' + i)]
-    : ensureDiscardGroup([
-        GROUP + 'a',
-        ...ids.slice(0, 7),
-        GROUP + 'b',
-        ...ids.slice(7),
-      ]);
+  return ensureDiscardGroup(
+    expert
+      ? [
+          GROUP + 'loose',
+          ...ids,
+          ...[1, 2, 3, 4].map((i) => GROUP + 'empty' + i),
+        ]
+      : [GROUP + 'a', ...ids.slice(0, 7), GROUP + 'b', ...ids.slice(7)],
+  );
 }
+// The fixed slot is always last in storage, but rendered outside the movable rail.
 export function ensureDiscardGroup(order: string[]) {
-  const groups = splitGroups(order);
-  return groups.length &&
-    !groups.some((g) => g.id === DISCARD_GROUP || g.ids.length < 2)
-    ? [...order, DISCARD_GROUP]
-    : order;
+  if (!order.length) return order;
+  const groups = splitGroups(order),
+    slot = groups.find((g) => g.id === DISCARD_GROUP);
+  return [
+    ...groups
+      .filter((g) => g.id !== DISCARD_GROUP)
+      .flatMap((g) => [g.id, ...g.ids]),
+    DISCARD_GROUP,
+    ...(slot?.ids || []),
+  ];
 }
 export function ensureDrawGroup(order: string[]) {
-  if (splitGroups(order).some((g) => !g.ids.length)) return order;
+  if (splitGroups(order).some((g) => g.id !== DISCARD_GROUP && !g.ids.length))
+    return order;
   let i = 1;
   while (order.includes(GROUP + 'draw' + i)) i++;
-  return [...order, GROUP + 'draw' + i];
+  return ensureDiscardGroup([...order, GROUP + 'draw' + i]);
 }
 export function reserveInGroup(order: string[], card: string) {
   if (order.includes(card)) return order;
@@ -30,16 +38,21 @@ export function reserveInGroup(order: string[], card: string) {
   return moveToGroup(
     next,
     card,
-    splitGroups(next).find((g) => !g.ids.length)!.id,
+    splitGroups(next).find((g) => g.id !== DISCARD_GROUP && !g.ids.length)!.id,
   );
 }
 export function reorderGroup(order: string[], id: string, index: number) {
-  const groups = splitGroups(order),
+  if (id === DISCARD_GROUP) return order;
+  const slot = splitGroups(order).find((g) => g.id === DISCARD_GROUP);
+  const groups = splitGroups(order).filter((g) => g.id !== DISCARD_GROUP),
     from = groups.findIndex((g) => g.id === id);
   if (from < 0 || from === index) return order;
   const [group] = groups.splice(from, 1);
   groups.splice(Math.max(0, Math.min(index, groups.length)), 0, group);
-  return groups.flatMap((g) => [g.id, ...g.ids]);
+  return [
+    ...groups.flatMap((g) => [g.id, ...g.ids]),
+    ...(slot ? [slot.id, ...slot.ids] : []),
+  ];
 }
 export const isGroup = (id: string) => id.startsWith(GROUP);
 export function splitGroups(order: string[]) {
@@ -89,11 +102,16 @@ export function pruneEmptiedGroups(
   );
   return splitGroups(next)
     .filter(
-      (g) => g.ids.length || g.id === preserveEmpty || !occupied.has(g.id),
+      (g) =>
+        g.ids.length ||
+        g.id === DISCARD_GROUP ||
+        g.id === preserveEmpty ||
+        !occupied.has(g.id),
     )
     .flatMap((g) => [g.id, ...g.ids]);
 }
 export function removeGroup(order: string[], group: string) {
+  if (group === DISCARD_GROUP) return order;
   const groups = splitGroups(order);
   const index = groups.findIndex((g) => g.id === group);
   if (index < 0 || groups.length < 2) return order;
@@ -185,6 +203,7 @@ export function arrangeHand(
   hand: Card[],
   wild: number,
   picked: string | null = null,
+  forPoints = false,
 ) {
   if (!hand.length) return [] as Card[][];
   if (hand.length > 14) throw Error('Arrange supports up to 14 cards.');
@@ -209,9 +228,11 @@ export function arrangeHand(
       const c = {
         mask,
         type,
-        reward:
-          cards.length * 10000 +
-          cards.reduce((sum, c) => sum + value(c, wild), 0) * 5,
+        reward: forPoints
+          ? cards.reduce((sum, c) => sum + value(c, wild), 0) * 10000 +
+            cards.length
+          : cards.length * 10000 +
+            cards.reduce((sum, c) => sum + value(c, wild), 0) * 5,
       };
       for (let i = 0; i < n; i++) if (mask & (1 << i)) byBit[i].push(c);
     }
@@ -221,7 +242,12 @@ export function arrangeHand(
   const key = (mask: number, seq: number, pure: number) =>
     mask * 6 + seq * 2 + pure;
   function solve(mask: number, seq: number, pure: number): number {
-    if (!mask) return pure * 10000000 + seq * 1000000;
+    if (!mask)
+      return forPoints
+        ? pure && seq >= 2
+          ? 100000000
+          : 0
+        : pure * 10000000 + seq * 1000000;
     const k = key(mask, seq, pure);
     const cached = memo.get(k);
     if (cached !== undefined) return cached;
@@ -253,7 +279,8 @@ export function arrangeHand(
     let best = -Infinity;
     for (let i = 0; i < n; i++) {
       const m = full ^ (1 << i);
-      const score = solve(m, 0, 0);
+      const score =
+        solve(m, 0, 0) + (forPoints ? value(hand[i], wild) * 10000 : 0);
       if (
         score > best ||
         (score === best && value(hand[i], wild) > value(hand[spare], wild))

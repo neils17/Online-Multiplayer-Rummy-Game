@@ -1,46 +1,58 @@
 import assert from 'node:assert/strict';
 const api = async (body) => {
-  const response = await fetch('http://localhost:3000/api/game', {
+  const r = await fetch('http://localhost:3000/api/game', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  const data = await response.json();
-  assert.equal(response.status, 200, data.error);
-  return data;
+  const d = await r.json();
+  assert.equal(r.status, 200, d.error);
+  return d;
 };
-const first = await api({ action: 'create', expert: true, name: 'Expert A' });
-const second = await api({
-  action: 'join',
-  code: first.game.code,
-  name: 'Expert B',
-});
-const seat = { code: first.game.code, token: first.token };
-let { game } = await api({ ...seat, action: 'draw' });
-const ids = game.players[0].hand.map((c) => c.id).reverse();
-const groups = [
-  ids.slice(0, 4),
-  ids.slice(4, 8),
-  ids.slice(8, 13),
-  ids.slice(13),
-];
-({ game } = await api({ ...seat, action: 'declare', groups }));
-assert.equal(game.status, 'ended');
-const remaining = new Set(game.players[0].hand.map((c) => c.id));
-const expected = groups
-  .map((g) => g.filter((id) => remaining.has(id)))
-  .filter((g) => g.length);
-assert.deepEqual(game.history.at(-1).declaredGroups, {
-  player: 0,
-  groups: expected,
-});
-const other = (
-  await api({ code: first.game.code, token: second.token, action: 'poll' })
-).game;
-assert.deepEqual(
-  other.history.at(-1).declaredGroups,
-  game.history.at(-1).declaredGroups,
-);
+for (const expert of [false, true]) {
+  const a = await api({ action: 'create', expert, name: 'A' }),
+    b = await api({ action: 'join', code: a.game.code, name: 'B' });
+  const seats = [
+    { code: a.game.code, token: a.token },
+    { code: a.game.code, token: b.token },
+  ];
+  const ids = b.game.players[1].hand.map((c) => c.id).reverse();
+  const otherLayout = {
+    groups: [ids.slice(0, 3), ids.slice(3, 9), ids.slice(9)],
+  };
+  await api({
+    ...seats[1],
+    action: 'poll',
+    round: b.game.round,
+    match: b.game.match,
+    layout: otherLayout,
+  });
+  let { game } = await api({ ...seats[0], action: 'draw' });
+  assert.equal(
+    game.players[1].layout,
+    undefined,
+    'opponent groups remain private in play',
+  );
+  const hand = game.players[0].hand.map((c) => c.id).reverse();
+  const layout = {
+    groups: [hand.slice(0, 4), hand.slice(4, 8), hand.slice(8, 13)],
+    discardId: hand[13],
+  };
+  ({ game } = await api({
+    ...seats[0],
+    action: 'declare',
+    round: game.round,
+    match: game.match,
+    cardId: hand[13],
+    layout,
+  }));
+  assert.equal(game.status, 'ended');
+  const actual = game.history.at(-1).actualLayouts;
+  assert.deepEqual(actual[1].groups, otherLayout.groups);
+  assert.deepEqual(actual[0].groups, layout.groups);
+  const remote = (await api({ ...seats[1], action: 'poll' })).game;
+  assert.deepEqual(remote.history.at(-1).actualLayouts, actual);
+}
 console.log(
-  'PASS: expert actual groups survive server declaration and are identical for both scoreboard viewers.',
+  'PASS: both players actual groups persist in both modes, stay private until round end, and appear identically to both viewers.',
 );

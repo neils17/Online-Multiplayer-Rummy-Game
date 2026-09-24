@@ -83,7 +83,24 @@ while (!state.matchOver) {
     ).game;
     continue;
   }
-  state = (await api({ ...seats[who], action: 'declare' })).game;
+  const selected = state.players[who].hand.at(-1).id;
+  state = (
+    await api({
+      ...seats[who],
+      action: 'declare',
+      cardId: selected,
+      round: state.round,
+      match: state.match,
+      layout: {
+        groups: [
+          state.players[who].hand
+            .filter((c) => c.id !== selected)
+            .map((c) => c.id),
+        ],
+        discardId: selected,
+      },
+    })
+  ).game;
   if (!state.matchOver) {
     await api({ ...seats[0], action: 'next' });
     state = (await api({ ...seats[1], action: 'next' })).game;

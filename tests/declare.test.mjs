@@ -36,7 +36,7 @@ const make = (hand) => ({
 });
 assert.equal(winningDiscard([...ready, spare], 10, null)?.id, spare.id);
 const missing = make([...ready, spare]);
-assert.throws(() => act(missing, 0, 'declare'), /Discard slot/);
+assert.throws(() => act(missing, 0, 'declare'), /Close Card/);
 assert.equal(missing.status, 'playing');
 for (const selected of [spare.id]) {
   const g = make([...ready, spare]);
@@ -70,7 +70,7 @@ const beforeDraw = make(ready);
 beforeDraw.phase = 'draw';
 assert.throws(() => act(beforeDraw, 0, 'declare'), /14 cards/);
 console.log(
-  'PASS: required Discard slot, selected winning discard respected, invalid penalty, open draw can be the winning discard, 14-card and turn enforcement.',
+  'PASS: required Close Card, selected winning discard respected, invalid penalty, open draw can be the winning discard, 14-card and turn enforcement.',
 );
 
 const wrong = make([...ready, spare]);

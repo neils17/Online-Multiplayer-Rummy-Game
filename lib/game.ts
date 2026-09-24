@@ -419,10 +419,10 @@ export function act(g: Game, i: number, a: string, cardId?: string) {
     if (g.phase !== 'discard' || p.hand.length !== 14)
       throw Error('Draw to 14 cards before declaring.');
     if (!cardId)
-      throw Error('Place one card in the Discard slot before declaring.');
+      throw Error('Place one card in Close Card before declaring.');
     const selected = p.hand.find((c) => c.id === cardId);
     if (!selected)
-      throw Error('The Discard slot card is no longer in your hand.');
+      throw Error('The Close Card is no longer in your hand.');
     const spare = analyze(
       p.hand.filter((c) => c.id !== cardId),
       g.wild.r,

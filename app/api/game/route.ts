@@ -169,7 +169,7 @@ export async function POST(req: Request) {
           b.action === 'declare' &&
           (!b.cardId || g.players[i].layout?.discardId !== b.cardId)
         )
-          throw Error('Place one card in the Discard slot before declaring.');
+          throw Error('Place one card in Close Card before declaring.');
         if (b.action !== 'poll') act(g, i, b.action, b.cardId);
         else botMoved = advanceBot(g);
         g.players.forEach((p) => {

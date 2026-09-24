@@ -4569,7 +4569,10 @@ body {
 /* A dedicated fixed discard column, outside the reorderable group rail. */
 .shell.casino.game-shell .hand-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) max(64px, calc(var(--hand-card-width) + 14px));
+  grid-template-columns: minmax(0, 1fr) max(
+      64px,
+      calc(var(--hand-card-width) + 14px)
+    );
   gap: 8px;
   min-width: 0;
   min-height: 0;
@@ -4671,6 +4674,83 @@ body {
 }
 
 /* Give the hand priority on short landscape screens. */
-:root[data-layout="landscape"] .shell.casino.game-shell .table.in-game {
+:root[data-layout='landscape'] .shell.casino.game-shell .table.in-game {
   grid-template-rows: 26px 50px 32px minmax(174px, 0.85fr) minmax(230px, 1.65fr);
 }
+
+/* Every scoreboard view occupies the same measured frame, including hidden views. */
+.score-views {
+  display: grid;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+.score-views > .score-panel {
+  grid-area: 1 / 1;
+  height: 100%;
+  min-width: 0;
+}
+.score-views > .score-panel[hidden] {
+  display: block;
+  visibility: hidden;
+  pointer-events: none;
+}
+.review-variants {
+  display: grid;
+  width: 100%;
+}
+.review-variants > .round-review {
+  grid-area: 1 / 1;
+  min-width: 0;
+}
+.score-modal .review-player {
+  flex: 1;
+}
+.score-modal .review-note {
+  min-height: 26px;
+}
+.score-modal .review-requirements {
+  min-height: 28px;
+}
+/* The stationary Close Card uses the same dimensions and finish as hand groups. */
+.shell.casino.game-shell .hand-group.fixed-discard {
+  --group-color: #73afe780;
+  --group-bg: #548fcb12;
+  border: 1px solid var(--group-color);
+  border-radius: 7px;
+  background: var(--group-bg);
+  box-shadow: none;
+  padding: 4px 6px;
+}
+.shell.casino.game-shell.expert-mode .hand-group.fixed-discard {
+  border-width: 2px;
+}
+.shell.casino.game-shell .fixed-discard .discard-slot-title {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  min-height: 22px;
+  margin: 0 0 6px;
+  font: 700 9px/11px sans-serif;
+  color: #b8dbff;
+}
+.shell.casino.game-shell .fixed-discard .discard-slot-title > span {
+  white-space: nowrap;
+  overflow: visible;
+  text-overflow: clip;
+  max-width: none;
+}
+.score-modal .review-group.winning-discard {
+  border-color: #73afe780 !important;
+  background: #548fcb12;
+}
+
+.shell.casino.game-shell .hand-group.fixed-discard[data-drop-target='true'] {
+  outline-color: #9cd0ff;
+  background: #28506b;
+  box-shadow: none;
+}
+
+.score-views > .score-panel[hidden] .round-review { visibility: hidden !important; }

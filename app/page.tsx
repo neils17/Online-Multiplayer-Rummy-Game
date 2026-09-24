@@ -1237,7 +1237,7 @@ export default function Home() {
                               className="group-label"
                               role="button"
                               tabIndex={0}
-                              aria-label={`Move ${group.id === DISCARD_GROUP ? 'discard card' : info.label} group. Drag or use arrow keys.`}
+                              aria-label={`Move ${group.id === DISCARD_GROUP ? 'Close Card' : info.label} group. Drag or use arrow keys.`}
                               onPointerDown={(e) => {
                                 if (
                                   g.status === 'playing' &&
@@ -1257,7 +1257,7 @@ export default function Home() {
                               <span title={info.label}>
                                 {info.valid ? '✓ ' : ''}
                                 {group.id === DISCARD_GROUP
-                                  ? 'Discard card'
+                                  ? 'Close Card'
                                   : info.label}
                               </span>
                               <div className="group-label-tools">
@@ -1317,11 +1317,13 @@ export default function Home() {
                       })}
                     </div>
                     <aside
-                      className="fixed-discard"
+                      className="hand-group fixed-discard"
                       data-hand-group={DISCARD_GROUP}
-                      aria-label="Discard slot, one card"
+                      aria-label="Close Card, one card"
                     >
-                      <strong className="discard-slot-title">Discard</strong>
+                      <div className="group-label discard-slot-title">
+                        <span>Close Card</span>
+                      </div>
                       <div className="group-cards">
                         {handGroups
                           .find((group) => group.id === DISCARD_GROUP)
@@ -1403,7 +1405,7 @@ export default function Home() {
                               )?.ids[0];
                               if (!id)
                                 setError(
-                                  'Place one card in the Discard slot before declaring.',
+                                  'Place one card in Close Card before declaring.',
                                 );
                               else void call('declare', id);
                             }}
@@ -1553,78 +1555,86 @@ export default function Home() {
                     </button>
                   ))}
               </nav>
-              <div className="score-panel" hidden={scoreTab !== -1}>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Round</TableHead>
-                      {g.players.map((p, i) => (
-                        <TableHead key={i}>{p.name}</TableHead>
-                      ))}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {g.history.length ? (
-                      g.history
-                        .slice(scorePage * 5, scorePage * 5 + 5)
-                        .map((h) => (
-                          <TableRow key={h.round}>
-                            <TableCell>
-                              {h.round}
-                              {h.multiplier === 2 && (
-                                <small className="bonus-tag">
-                                  2× natural {h.bonus}
-                                </small>
-                              )}
-                            </TableCell>
-                            {h.points.map((p, i) => (
-                              <TableCell key={i}>+{p}</TableCell>
-                            ))}
-                          </TableRow>
-                        ))
-                    ) : (
+              <div className="score-views">
+                <div className="score-panel" hidden={scoreTab !== -1} inert={scoreTab !== -1}>
+                  <Table>
+                    <TableHeader>
                       <TableRow>
-                        <TableCell colSpan={3}>
-                          No completed rounds yet.
-                        </TableCell>
+                        <TableHead>Round</TableHead>
+                        {g.players.map((p, i) => (
+                          <TableHead key={i}>{p.name}</TableHead>
+                        ))}
                       </TableRow>
-                    )}
-                  </TableBody>
-                  <TableFooter>
-                    <TableRow>
-                      <TableCell>Total</TableCell>
-                      {g.players.map((p, i) => (
-                        <TableCell key={i}>{p.score}</TableCell>
-                      ))}
-                    </TableRow>
-                  </TableFooter>
-                </Table>
-                <nav className="page-controls" aria-label="Score history pages">
-                  <button
-                    disabled={scorePage === 0}
-                    onClick={() => setScorePage((p) => p - 1)}
+                    </TableHeader>
+                    <TableBody>
+                      {g.history.length ? (
+                        g.history
+                          .slice(scorePage * 5, scorePage * 5 + 5)
+                          .map((h) => (
+                            <TableRow key={h.round}>
+                              <TableCell>
+                                {h.round}
+                                {h.multiplier === 2 && (
+                                  <small className="bonus-tag">
+                                    2× natural {h.bonus}
+                                  </small>
+                                )}
+                              </TableCell>
+                              {h.points.map((p, i) => (
+                                <TableCell key={i}>+{p}</TableCell>
+                              ))}
+                            </TableRow>
+                          ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={3}>
+                            No completed rounds yet.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                    <TableFooter>
+                      <TableRow>
+                        <TableCell>Total</TableCell>
+                        {g.players.map((p, i) => (
+                          <TableCell key={i}>{p.score}</TableCell>
+                        ))}
+                      </TableRow>
+                    </TableFooter>
+                  </Table>
+                  <nav
+                    className="page-controls"
+                    aria-label="Score history pages"
                   >
-                    ← Previous
-                  </button>
-                  <span>
-                    {scorePage + 1} /{' '}
-                    {Math.max(1, Math.ceil(g.history.length / 5))}
-                  </span>
-                  <button
-                    disabled={(scorePage + 1) * 5 >= g.history.length}
-                    onClick={() => setScorePage((p) => p + 1)}
-                  >
-                    Next →
-                  </button>
-                </nav>
-              </div>
-              {g.status === 'ended' && (
-                <div className="score-panel" hidden={scoreTab === -1}>
-                  <FittedPanel>
-                    <RoundHands game={g} playerIndex={Math.max(0, scoreTab)} />
-                  </FittedPanel>
+                    <button
+                      disabled={scorePage === 0}
+                      onClick={() => setScorePage((p) => p - 1)}
+                    >
+                      ← Previous
+                    </button>
+                    <span>
+                      {scorePage + 1} /{' '}
+                      {Math.max(1, Math.ceil(g.history.length / 5))}
+                    </span>
+                    <button
+                      disabled={(scorePage + 1) * 5 >= g.history.length}
+                      onClick={() => setScorePage((p) => p + 1)}
+                    >
+                      Next →
+                    </button>
+                  </nav>
                 </div>
-              )}
+                {g.status === 'ended' && (
+                  <div className="score-panel" hidden={scoreTab === -1} inert={scoreTab === -1}>
+                    <FittedPanel>
+                      <RoundHands
+                        game={g}
+                        playerIndex={Math.max(0, scoreTab)}
+                      />
+                    </FittedPanel>
+                  </div>
+                )}
+              </div>
               {g.status === 'ended' && (
                 <p className="ready-status" role="status">
                   {g.players

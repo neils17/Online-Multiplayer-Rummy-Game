@@ -68,9 +68,13 @@ export function useCardMotion(
       elements().map((el) => [el.dataset.card!, el.getBoundingClientRect()]),
     );
   }
+  const protectedGroups = () =>
+    active.current?.source === 'hand'
+      ? splitGroups(active.current.original).map((g) => g.id)
+      : active.current?.createdGroup;
   function update(next: string[]) {
     next = ensureDiscardGroup(
-      pruneEmptiedGroups(next, orderRef.current, active.current?.createdGroup),
+      pruneEmptiedGroups(next, orderRef.current, protectedGroups()),
     );
     if (next.join('|') === orderRef.current.join('|')) return;
     snapshot();
@@ -258,10 +262,8 @@ export function useCardMotion(
     zones.forEach((el) => {
       el.dataset.dropTarget = String(el.dataset.handGroup === group);
     });
-    // Existing hand cards keep cross-group targets stable until release. Cards
-    // from either pile preview their insertion with the animated incoming slot;
-    // cached group bounds keep that slot from chasing a resizing target.
-    if (!release && d.source === 'hand' && group !== d.sourceGroup) return;
+    // Preview every insertion immediately. Cached target bounds and preserved
+    // empty source groups keep cross-group movement stable during the gesture.
     const els = Array.from(
       zone.querySelectorAll<HTMLElement>('[data-card]'),
     ).filter((el) => el.dataset.card !== d.id);
@@ -285,7 +287,7 @@ export function useCardMotion(
     const base = orderRef.current.filter(
       (id) => !(d.source === 'draw' && id === d.face?.id),
     );
-    update(moveToGroup(base, d.id, group, anchor, d.createdGroup));
+    update(moveToGroup(base, d.id, group, anchor, protectedGroups()));
   }
   function move(e: React.PointerEvent<HTMLElement>) {
     const d = active.current;
@@ -319,7 +321,10 @@ export function useCardMotion(
       .forEach((el) => {
         delete el.dataset.dropTarget;
       });
+    const completed = active.current;
     active.current = null;
+    if (completed?.source === 'hand')
+      update(pruneEmptiedGroups(orderRef.current, completed.original));
     setDrag(null);
   }
   async function land(destination: DOMRect | (() => DOMRect), keep = false) {
@@ -549,7 +554,7 @@ export function useCardMotion(
     end,
     click,
     getOrder: () => orderRef.current,
-    protectedGroup: () => active.current?.createdGroup,
+    protectedGroup: protectedGroups,
     prepareDiscard: (card: Card) => {
       const d = active.current;
       if (d) {

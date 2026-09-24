@@ -71,7 +71,7 @@ export function moveToGroup(
   card: string,
   group: string,
   before?: string,
-  preserveEmpty?: string,
+  preserveEmpty?: string | readonly string[],
 ) {
   if (
     group === DISCARD_GROUP &&
@@ -93,7 +93,7 @@ export function moveToGroup(
 export function pruneEmptiedGroups(
   next: string[],
   previous: string[],
-  preserveEmpty?: string,
+  preserveEmpty?: string | readonly string[],
 ) {
   const occupied = new Set(
     splitGroups(previous)
@@ -105,7 +105,9 @@ export function pruneEmptiedGroups(
       (g) =>
         g.ids.length ||
         g.id === DISCARD_GROUP ||
-        g.id === preserveEmpty ||
+        (Array.isArray(preserveEmpty)
+          ? preserveEmpty.includes(g.id)
+          : g.id === preserveEmpty) ||
         !occupied.has(g.id),
     )
     .flatMap((g) => [g.id, ...g.ids]);

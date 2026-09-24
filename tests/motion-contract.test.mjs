@@ -386,18 +386,31 @@ console.log(
   });
   motion.move(event(325, 310, cardEl('a')));
   await new Promise((r) => setTimeout(r, 20));
-  assert.deepEqual(
-    order,
-    original,
-    'hovering a different group does not move or resize either group',
+  assert.ok(
+    cardsIn('~group:right').includes('a'),
+    'destination opens a slot before release',
+  );
+  assert.deepEqual(cardsIn('~group:left'), ['b']);
+  assert.equal(
+    order.filter((id) => id === 'a').length,
+    1,
+    'preview never duplicates the card',
   );
   assert.equal(zones[1].dataset.dropTarget, 'true');
+  motion.move(event(115, 350, cardEl('a')));
+  await new Promise((r) => setTimeout(r, 20));
+  assert.ok(
+    cardsIn('~group:left').includes('a'),
+    'can preview back into the original group',
+  );
+  motion.move(event(325, 310, cardEl('a')));
+  await new Promise((r) => setTimeout(r, 20));
   await motion.end(event(325, 310, cardEl('a')));
   assert.ok(cardsIn('~group:right').includes('a'));
   assert.deepEqual(cardsIn('~group:left'), ['b']);
   await new Promise((r) => setTimeout(r, 510));
   console.log(
-    'PASS: top-right cross-group target remains stationary until a single insertion on release.',
+    'PASS: cross-group insertion previews before release while retaining cached hit targets.',
   );
 }
 // Both piles preview insertion before release, including before a draw resolves.

@@ -54,11 +54,12 @@ export function useHandFit(
   ref: RefObject<HTMLDivElement | null>,
   counts: number[],
   expert: boolean,
+  fixedDiscard = false,
 ) {
   const [size, setSize] = useState({ width: 400, height: 220 });
   const hasCards = counts.some((count) => count > 0);
   useLayoutEffect(() => {
-    const el = ref.current;
+    const el = fixedDiscard ? ref.current?.parentElement : ref.current;
     if (!el) return;
     const measure = () =>
       setSize((old) => {
@@ -71,11 +72,11 @@ export function useHandFit(
     const observer = new ResizeObserver(measure);
     observer.observe(el);
     return () => observer.disconnect();
-  }, [ref, hasCards]);
+  }, [ref, hasCards, fixedDiscard]);
   // Reserve the fourteenth card's space before drawing, so a tap draw does
   // not resize the other thirteen cards when its placeholder arrives.
   const capacity = [...counts];
   if (capacity.length && capacity.reduce((sum, n) => sum + n, 0) === 13)
     capacity[capacity.length - 1]++;
-  return fitHand(capacity, size.width, size.height, expert);
+  return fitHand(capacity, size.width, size.height, expert, fixedDiscard);
 }

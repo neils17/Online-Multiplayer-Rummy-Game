@@ -618,6 +618,7 @@ export default function Home() {
       .filter((g) => g.id !== DISCARD_GROUP)
       .map((group) => group.cards.length),
     false,
+    true,
   );
   const groupInfo = handGroups.map((group) =>
     describeGroup(

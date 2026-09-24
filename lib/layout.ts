@@ -15,12 +15,14 @@ export function fitHand(
   width: number,
   height: number,
   expert = false,
+  fixedDiscard = false,
 ) {
   const gap = 8,
     padding = expert ? 0 : 14,
     label = expert ? 0 : 28;
   for (let card = 116; card >= 18; card--) {
     const step = card * (expert ? 0.43 : 0.52);
+    const railWidth = width - (fixedDiscard ? Math.max(64, card + 14) + gap : 0);
     let rows = 1,
       used = 0,
       fits = true;
@@ -29,11 +31,11 @@ export function fitHand(
         expert ? 0 : 64,
         card + Math.max(0, count - 1) * step + padding,
       );
-      if (group > width) {
+      if (group > railWidth) {
         fits = false;
         break;
       }
-      if (used && used + gap + group > width) {
+      if (used && used + gap + group > railWidth) {
         rows++;
         used = 0;
       }

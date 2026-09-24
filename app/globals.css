@@ -4569,8 +4569,8 @@ body {
 /* A dedicated fixed discard column, outside the reorderable group rail. */
 .shell.casino.game-shell .hand-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 106px;
-  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) max(64px, calc(var(--hand-card-width) + 14px));
+  gap: 8px;
   min-width: 0;
   min-height: 0;
   height: 100%;
@@ -4583,8 +4583,8 @@ body {
 }
 .shell.casino.game-shell .fixed-discard {
   box-sizing: border-box;
-  width: 106px;
-  padding: 9px 7px;
+  width: 100%;
+  padding: 4px 6px;
   border: 2px solid #6aafe7;
   border-radius: 12px;
   background: linear-gradient(155deg, #1b4667, #102f49);
@@ -4596,11 +4596,11 @@ body {
 }
 .shell.casino.game-shell .fixed-discard .discard-slot-title {
   display: block;
-  font: 700 15px/22px sans-serif;
+  font: 700 12px/22px sans-serif;
   color: #e0f2ff;
   white-space: nowrap;
   overflow: visible;
-  margin: 0 0 7px;
+  margin: 0 0 6px;
 }
 .shell.casino.game-shell .fixed-discard .group-cards {
   justify-content: center;
@@ -4613,7 +4613,8 @@ body {
   margin: 0;
 }
 .shell.casino.game-shell .fixed-discard .empty-group {
-  width: 90px;
+  width: 100%;
+  min-width: 0;
   color: #d5eaff;
 }
 .shell.casino.game-shell .fixed-discard[data-drop-target='true'] {
@@ -4641,10 +4642,10 @@ body {
   container-type: size;
 }
 .shell.casino.game-shell .fixed-discard {
-  --slot-card-width: clamp(32px, calc((100cqh - 56px) / 1.4), 90px);
+  --slot-card-width: var(--hand-card-width);
 }
 .shell.casino.game-shell .fixed-discard .group-cards {
-  height: calc(var(--slot-card-width) * 1.4);
+  height: calc(var(--slot-card-width) * 1.4 + 4px);
 }
 .shell.casino.game-shell .fixed-discard .hand-card {
   width: var(--slot-card-width);
@@ -4667,4 +4668,9 @@ body {
   background: transparent;
   color: #ddcfad;
   border: 1px solid #8d805c;
+}
+
+/* Give the hand priority on short landscape screens. */
+:root[data-layout="landscape"] .shell.casino.game-shell .table.in-game {
+  grid-template-rows: 26px 50px 32px minmax(174px, 0.85fr) minmax(230px, 1.65fr);
 }

@@ -4678,41 +4678,6 @@ body {
   grid-template-rows: 26px 50px 32px minmax(174px, 0.85fr) minmax(230px, 1.65fr);
 }
 
-/* Every scoreboard view occupies the same measured frame, including hidden views. */
-.score-views {
-  display: grid;
-  flex: 1;
-  min-height: 0;
-  min-width: 0;
-  overflow: hidden;
-}
-.score-views > .score-panel {
-  grid-area: 1 / 1;
-  height: 100%;
-  min-width: 0;
-}
-.score-views > .score-panel[hidden] {
-  display: block;
-  visibility: hidden;
-  pointer-events: none;
-}
-.review-variants {
-  display: grid;
-  width: 100%;
-}
-.review-variants > .round-review {
-  grid-area: 1 / 1;
-  min-width: 0;
-}
-.score-modal .review-player {
-  flex: 1;
-}
-.score-modal .review-note {
-  min-height: 26px;
-}
-.score-modal .review-requirements {
-  min-height: 28px;
-}
 /* The stationary Close Card uses the same dimensions and finish as hand groups. */
 .shell.casino.game-shell .hand-group.fixed-discard {
   --group-color: #73afe780;
@@ -4752,5 +4717,3 @@ body {
   background: #28506b;
   box-shadow: none;
 }
-
-.score-views > .score-panel[hidden] .round-review { visibility: hidden !important; }

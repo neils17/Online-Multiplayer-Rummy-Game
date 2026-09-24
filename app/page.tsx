@@ -1555,86 +1555,86 @@ export default function Home() {
                     </button>
                   ))}
               </nav>
-              <div className="score-views">
-                <div className="score-panel" hidden={scoreTab !== -1} inert={scoreTab !== -1}>
-                  <Table>
-                    <TableHeader>
+              <div
+                className="score-panel"
+                hidden={scoreTab !== -1}
+                inert={scoreTab !== -1}
+              >
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Round</TableHead>
+                      {g.players.map((p, i) => (
+                        <TableHead key={i}>{p.name}</TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {g.history.length ? (
+                      g.history
+                        .slice(scorePage * 5, scorePage * 5 + 5)
+                        .map((h) => (
+                          <TableRow key={h.round}>
+                            <TableCell>
+                              {h.round}
+                              {h.multiplier === 2 && (
+                                <small className="bonus-tag">
+                                  2× natural {h.bonus}
+                                </small>
+                              )}
+                            </TableCell>
+                            {h.points.map((p, i) => (
+                              <TableCell key={i}>+{p}</TableCell>
+                            ))}
+                          </TableRow>
+                        ))
+                    ) : (
                       <TableRow>
-                        <TableHead>Round</TableHead>
-                        {g.players.map((p, i) => (
-                          <TableHead key={i}>{p.name}</TableHead>
-                        ))}
+                        <TableCell colSpan={3}>
+                          No completed rounds yet.
+                        </TableCell>
                       </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {g.history.length ? (
-                        g.history
-                          .slice(scorePage * 5, scorePage * 5 + 5)
-                          .map((h) => (
-                            <TableRow key={h.round}>
-                              <TableCell>
-                                {h.round}
-                                {h.multiplier === 2 && (
-                                  <small className="bonus-tag">
-                                    2× natural {h.bonus}
-                                  </small>
-                                )}
-                              </TableCell>
-                              {h.points.map((p, i) => (
-                                <TableCell key={i}>+{p}</TableCell>
-                              ))}
-                            </TableRow>
-                          ))
-                      ) : (
-                        <TableRow>
-                          <TableCell colSpan={3}>
-                            No completed rounds yet.
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                    <TableFooter>
-                      <TableRow>
-                        <TableCell>Total</TableCell>
-                        {g.players.map((p, i) => (
-                          <TableCell key={i}>{p.score}</TableCell>
-                        ))}
-                      </TableRow>
-                    </TableFooter>
-                  </Table>
-                  <nav
-                    className="page-controls"
-                    aria-label="Score history pages"
+                    )}
+                  </TableBody>
+                  <TableFooter>
+                    <TableRow>
+                      <TableCell>Total</TableCell>
+                      {g.players.map((p, i) => (
+                        <TableCell key={i}>{p.score}</TableCell>
+                      ))}
+                    </TableRow>
+                  </TableFooter>
+                </Table>
+                <nav className="page-controls" aria-label="Score history pages">
+                  <button
+                    disabled={scorePage === 0}
+                    onClick={() => setScorePage((p) => p - 1)}
                   >
-                    <button
-                      disabled={scorePage === 0}
-                      onClick={() => setScorePage((p) => p - 1)}
-                    >
-                      ← Previous
-                    </button>
-                    <span>
-                      {scorePage + 1} /{' '}
-                      {Math.max(1, Math.ceil(g.history.length / 5))}
-                    </span>
-                    <button
-                      disabled={(scorePage + 1) * 5 >= g.history.length}
-                      onClick={() => setScorePage((p) => p + 1)}
-                    >
-                      Next →
-                    </button>
-                  </nav>
-                </div>
-                {g.status === 'ended' && (
-                  <div className="score-panel" hidden={scoreTab === -1} inert={scoreTab === -1}>
-                    <FittedPanel>
-                      <RoundHands
-                        game={g}
-                        playerIndex={Math.max(0, scoreTab)}
-                      />
-                    </FittedPanel>
-                  </div>
-                )}
+                    ← Previous
+                  </button>
+                  <span>
+                    {scorePage + 1} /{' '}
+                    {Math.max(1, Math.ceil(g.history.length / 5))}
+                  </span>
+                  <button
+                    disabled={(scorePage + 1) * 5 >= g.history.length}
+                    onClick={() => setScorePage((p) => p + 1)}
+                  >
+                    Next →
+                  </button>
+                </nav>
               </div>
+              {g.status === 'ended' && (
+                <div
+                  className="score-panel"
+                  hidden={scoreTab === -1}
+                  inert={scoreTab === -1}
+                >
+                  <FittedPanel>
+                    <RoundHands game={g} playerIndex={Math.max(0, scoreTab)} />
+                  </FittedPanel>
+                </div>
+              )}
               {g.status === 'ended' && (
                 <p className="ready-status" role="status">
                   {g.players

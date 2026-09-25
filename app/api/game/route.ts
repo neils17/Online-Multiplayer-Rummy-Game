@@ -11,6 +11,7 @@ import {
   reconcileLayout,
   type Game,
 } from '@/lib/game';
+import { REACTIONS } from '@/lib/reactions';
 import { advanceBot, scheduleBot } from '@/lib/bot';
 const reply = (data: unknown, status = 200) =>
   Response.json(data, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -50,6 +51,8 @@ export async function POST(req: Request) {
   try {
     const b = (await req.json()) as {
       action: string;
+      gif?: string;
+      reactionId?: string;
       groups?: unknown;
       layout?: unknown;
       name?: string;
@@ -157,6 +160,42 @@ export async function POST(req: Request) {
             },
             403,
           );
+        // Reactions are independent of turns, layouts, bot scheduling, and card actions.
+        if (b.action === 'reaction') {
+          if (
+            !REACTIONS.some((r) => r.id === b.gif) ||
+            typeof b.reactionId !== 'string' ||
+            !/^[a-zA-Z0-9-]{1,64}$/.test(b.reactionId)
+          )
+            return reply({ error: 'Choose a reaction from the menu.' }, 400);
+          const existing = g.reactions?.find(
+            (r) => r.id === b.reactionId && r.player === i,
+          );
+          if (existing) return reply({ reaction: existing });
+          const now = Date.now();
+          if (g.reactions?.some((r) => r.player === i && now - r.at < 1500))
+            return reply(
+              { error: 'Give your reaction a moment before sending another.' },
+              429,
+            );
+          const reaction = {
+            id: b.reactionId,
+            gif: b.gif!,
+            player: i,
+            at: now,
+          };
+          g.reactions = [
+            ...(g.reactions || []).filter((r) => now - r.at < 15000),
+            reaction,
+          ].slice(-8);
+          const changed = await db
+            .update(rooms)
+            .set({ state: JSON.stringify(g), version: row.version + 1 })
+            .where(and(eq(rooms.code, code), eq(rooms.version, row.version)))
+            .returning({ code: rooms.code });
+          if (!changed.length) continue;
+          return reply({ reaction });
+        }
         if (
           (b.action === 'next' || b.action === 'restart') &&
           ((b.match !== undefined && b.match !== g.match) ||
@@ -189,8 +228,7 @@ export async function POST(req: Request) {
           .where(and(eq(rooms.code, code), eq(rooms.version, row.version)))
           .returning({ code: rooms.code });
         if (!changed.length) {
-          if ((b.action === 'next' || b.action === 'restart') && attempt < 3)
-            continue;
+          if (b.action !== 'poll' && attempt < 3) continue;
           if (b.action === 'poll') {
             const latest = await db
               .select()

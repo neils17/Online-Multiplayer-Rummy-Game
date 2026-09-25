@@ -1,5 +1,5 @@
 'use client';
-import { useLayoutEffect, useState, type RefObject } from 'react';
+import { useLayoutEffect, useState, useRef, type RefObject } from 'react';
 import { fitHand, fitViewport } from '@/lib/layout';
 export function useViewportStage() {
   useLayoutEffect(() => {
@@ -55,6 +55,7 @@ export function useHandFit(
   counts: number[],
   expert: boolean,
   fixedDiscard = false,
+  freeze = false,
 ) {
   const [size, setSize] = useState({ width: 400, height: 220 });
   const hasCards = counts.some((count) => count > 0);
@@ -78,5 +79,14 @@ export function useHandFit(
   const capacity = [...counts];
   if (capacity.length && capacity.reduce((sum, n) => sum + n, 0) === 13)
     capacity[capacity.length - 1]++;
-  return fitHand(capacity, size.width, size.height, expert, fixedDiscard);
+  const fitted = fitHand(
+    capacity,
+    size.width,
+    size.height,
+    expert,
+    fixedDiscard,
+  );
+  const stable = useRef(fitted);
+  if (!freeze) stable.current = fitted;
+  return stable.current;
 }

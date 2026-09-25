@@ -2,6 +2,7 @@
 import { useLayoutEffect, useRef, useState, useEffect } from 'react';
 import {
   moveToGroup,
+  swapIntoClose,
   pruneEmptiedGroups,
   ensureDiscardGroup,
   ensureDrawGroup,
@@ -30,7 +31,7 @@ type Gesture = {
   createdGroup?: string;
   group?: string;
   sourceGroup?: string;
-  zones?: { id: string; rect: DOMRect }[];
+  zones?: { id: string; rect: DOMRect; style?: React.CSSProperties }[];
   drawRequest?: Promise<Card | null>;
 };
 export function useCardMotion(
@@ -118,7 +119,31 @@ export function useCardMotion(
           animations.current.delete(el);
       };
     });
-  }, [order]);
+  }, [order, drag?.settling]);
+  function lockGroups(d: Gesture) {
+    if (!hand.current) return;
+    d.zones = Array.from(
+      hand.current.querySelectorAll<HTMLElement>('[data-hand-group]'),
+    ).map((el) => {
+      const rect = el.getBoundingClientRect(),
+        parent = el.parentElement;
+      if (!parent || el.dataset.handGroup === DISCARD_GROUP)
+        return { id: el.dataset.handGroup!, rect };
+      const pr = parent.getBoundingClientRect(),
+        scale = parent.offsetWidth ? pr.width / parent.offsetWidth : 1;
+      return {
+        id: el.dataset.handGroup!,
+        rect,
+        style: {
+          position: 'absolute',
+          left: (rect.left - pr.left) / scale,
+          top: (rect.top - pr.top) / scale,
+          width: rect.width / scale,
+          height: rect.height / scale,
+        },
+      };
+    });
+  }
   function paint() {
     frame.current = 0;
     const d = active.current,
@@ -224,6 +249,7 @@ export function useCardMotion(
     let zone = zones[0],
       distance = Infinity;
     const canEnter = (el: HTMLElement) =>
+      d.source === 'hand' ||
       el.dataset.handGroup !== DISCARD_GROUP ||
       !splitGroups(orderRef.current)
         .find((g) => g.id === DISCARD_GROUP)
@@ -259,6 +285,21 @@ export function useCardMotion(
     if (!zone) return;
     const group = zone.dataset.handGroup!;
     d.group = group;
+    const close = splitGroups(orderRef.current).find(
+      (g) => g.id === DISCARD_GROUP,
+    )?.ids[0];
+    if (
+      group === DISCARD_GROUP &&
+      close &&
+      close !== d.id &&
+      d.source === 'hand'
+    ) {
+      zones.forEach((el) => {
+        el.dataset.dropTarget = String(el === zone);
+      });
+      if (release) update(swapIntoClose(orderRef.current, d.id, d.original));
+      return;
+    }
     zones.forEach((el) => {
       el.dataset.dropTarget = String(el.dataset.handGroup === group);
     });
@@ -273,12 +314,15 @@ export function useCardMotion(
       if (!p) continue;
       const parent = el.offsetParent as HTMLElement;
       const scale = parent.offsetWidth ? p.width / parent.offsetWidth : 1;
-      const left = p.left + el.offsetLeft * scale;
       const nextCard = els[index + 1];
       const step = nextCard
         ? el.offsetWidth +
           parseFloat(getComputedStyle(nextCard).marginLeft || '0')
         : el.offsetWidth;
+      // Measure insertion slots without the floating card’s gap. Otherwise that
+      // gap shifts the threshold after every preview and can toggle back and forth.
+      const spacing = parseFloat(getComputedStyle(zone).getPropertyValue('--hand-card-step')) || step;
+      const left = p.left + index * spacing * scale;
       if (x < left + (step * scale) / 2) {
         anchor = el.dataset.card;
         break;
@@ -297,6 +341,7 @@ export function useCardMotion(
     if (!d.moved && Math.hypot(d.px - d.x, d.py - d.y) < 5) return;
     if (!d.moved) {
       d.moved = true;
+      lockGroups(d);
       setDrag({ ...d });
     }
     if (!frame.current) frame.current = requestAnimationFrame(paint);
@@ -421,6 +466,7 @@ export function useCardMotion(
     d.px = e.clientX;
     d.py = e.clientY;
     if (!cancel && inHand(d.px, d.py)) placeInHand(d, d.px, d.py, true);
+    snapshot();
     d.settling = true;
     setDrag({ ...d });
     cancelAnimationFrame(frame.current);
@@ -555,6 +601,19 @@ export function useCardMotion(
     click,
     getOrder: () => orderRef.current,
     protectedGroup: protectedGroups,
+    groupStyle: (id: string, count: number, card: number, step: number) => {
+      const d = active.current;
+      const fixed =
+        d?.moved && !d.settling
+          ? d.zones?.find((z) => z.id === id)?.style
+          : undefined;
+      if (!fixed) return {};
+      const room = Number(fixed.width) - 16;
+      return {
+        ...fixed,
+        '--hand-card-step': `${Math.min(step, Math.max(3, (room - card) / Math.max(1, count - 1)))}px`,
+      } as React.CSSProperties;
+    },
     prepareDiscard: (card: Card) => {
       const d = active.current;
       if (d) {

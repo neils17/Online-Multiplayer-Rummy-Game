@@ -27,7 +27,14 @@ export type Player = {
   score: number;
   draws: number;
 };
+export type TableReaction = {
+  id: string;
+  gif: string;
+  player: number;
+  at: number;
+};
 export type Game = {
+  reactions?: TableReaction[];
   botAt?: number;
   decks?: 1 | 2;
   ready?: boolean[];
@@ -418,11 +425,9 @@ export function act(g: Game, i: number, a: string, cardId?: string) {
   if (a === 'declare') {
     if (g.phase !== 'discard' || p.hand.length !== 14)
       throw Error('Draw to 14 cards before declaring.');
-    if (!cardId)
-      throw Error('Place one card in Close Card before declaring.');
+    if (!cardId) throw Error('Place one card in Close Card before declaring.');
     const selected = p.hand.find((c) => c.id === cardId);
-    if (!selected)
-      throw Error('The Close Card is no longer in your hand.');
+    if (!selected) throw Error('The Close Card is no longer in your hand.');
     const spare = analyze(
       p.hand.filter((c) => c.id !== cardId),
       g.wild.r,

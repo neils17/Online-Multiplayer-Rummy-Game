@@ -275,7 +275,7 @@ console.log(
       closest: () => ({ setPointerCapture() {} }),
     };
   }
-  globalThis.getComputedStyle = () => ({ marginLeft: '-45' });
+  globalThis.getComputedStyle = () => ({ marginLeft: '-45', getPropertyValue: () => '' });
   const motion = useCardMotion(
     order,
     (next) => {
@@ -336,11 +336,16 @@ console.log(
 {
   let order = ['~group:left', 'a', 'b', '~group:right', 'c', 'd'];
   const original = [...order];
+  const parent = {
+    offsetWidth: 440,
+    getBoundingClientRect: () => rect(80, 270, 440, 220),
+  };
   const zones = [
     { id: '~group:left', left: 100, top: 330 },
     { id: '~group:right', left: 300, top: 290 },
   ].map((z) => ({
     dataset: { handGroup: z.id },
+    parentElement: parent,
     getBoundingClientRect: () => rect(z.left, z.top, 135, 126),
     offsetWidth: 135,
     querySelectorAll: () => cardsIn(z.id).map(cardEl),
@@ -397,6 +402,14 @@ console.log(
     'preview never duplicates the card',
   );
   assert.equal(zones[1].dataset.dropTarget, 'true');
+  const frozen = motion.groupStyle('~group:right', 3, 90, 45);
+  assert.equal(frozen.position, 'absolute');
+  assert.equal(frozen.left, 220);
+  assert.equal(frozen.top, 20);
+  assert.equal(frozen.width, 135);
+  assert.equal(frozen.height, 126);
+  assert.equal(motion.groupStyle('~group:right', 2, 90, 45).left, frozen.left);
+  assert.equal(motion.groupStyle('~group:right', 2, 90, 45).width, frozen.width);
   motion.move(event(115, 350, cardEl('a')));
   await new Promise((r) => setTimeout(r, 20));
   assert.ok(
@@ -406,6 +419,7 @@ console.log(
   motion.move(event(325, 310, cardEl('a')));
   await new Promise((r) => setTimeout(r, 20));
   await motion.end(event(325, 310, cardEl('a')));
+  assert.deepEqual(motion.groupStyle('~group:right', 3, 90, 45), {});
   assert.ok(cardsIn('~group:right').includes('a'));
   assert.deepEqual(cardsIn('~group:left'), ['b']);
   await new Promise((r) => setTimeout(r, 510));

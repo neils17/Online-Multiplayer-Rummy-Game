@@ -29,7 +29,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { RulesPages } from '@/components/game/rules-pages';
 import { DiscardStack } from '@/components/game/discard-stack';
-import { FittedPanel } from '@/components/game/fitted-panel';
+import { TableReactions } from '@/components/game/table-reactions';
 import { RoundHands } from '@/components/game/round-hands';
 import { CardFace as Face } from '@/components/game/card-face';
 import { useCardFlight } from '@/hooks/use-card-flight';
@@ -53,12 +53,14 @@ import {
   type Card,
   type RoundResult,
   type HandLayout,
+  type TableReaction,
   rank,
   suit,
   dropRestriction,
   droppedCard,
 } from '@/lib/game';
 type View = {
+  reactions?: TableReaction[];
   expert: boolean;
   decks: 1 | 2;
   ready: boolean[];
@@ -619,6 +621,7 @@ export default function Home() {
       .map((group) => group.cards.length),
     false,
     true,
+    !!drag?.moved && !drag.settling,
   );
   const groupInfo = handGroups.map((group) =>
     describeGroup(
@@ -1035,6 +1038,15 @@ export default function Home() {
             ) : (
               <>
                 <div className="opponent-seat">
+                  {seat && (
+                    <TableReactions
+                      key={g.code}
+                      seat={seat}
+                      players={g.players}
+                      me={g.me}
+                      reactions={g.reactions || []}
+                    />
+                  )}
                   <div
                     className={`opponent ${!mine && g.status === 'playing' ? 'active-player' : ''}`}
                   >
@@ -1229,6 +1241,12 @@ export default function Home() {
                                   Math.max(0, group.cards.length - 1) *
                                     handFit.step +
                                   14,
+                              ),
+                              ...motion.groupStyle(
+                                group.id,
+                                group.cards.length,
+                                handFit.card,
+                                handFit.step,
                               ),
                             }}
                             className={`hand-group ${`group-${info.kind}`} ${group.cards.length > 7 ? 'group-scroll' : ''}`}
@@ -1630,9 +1648,7 @@ export default function Home() {
                   hidden={scoreTab === -1}
                   inert={scoreTab === -1}
                 >
-                  <FittedPanel>
-                    <RoundHands game={g} playerIndex={Math.max(0, scoreTab)} />
-                  </FittedPanel>
+                  <RoundHands game={g} playerIndex={Math.max(0, scoreTab)} />
                 </div>
               )}
               {g.status === 'ended' && (

@@ -89,6 +89,24 @@ export function moveToGroup(
   next.splice(anchor > start && anchor < end ? anchor : end, 0, card);
   return pruneEmptiedGroups(next, order, preserveEmpty);
 }
+// A full Close Card swaps back into the dragged card's original slot.
+export function swapIntoClose(
+  order: string[],
+  card: string,
+  original: string[],
+) {
+  const source = splitGroups(original).find((g) => g.ids.includes(card));
+  const close = splitGroups(order).find((g) => g.id === DISCARD_GROUP)?.ids[0];
+  if (!source || source.id === DISCARD_GROUP || !close || close === card)
+    return order;
+  const after = source.ids
+    .slice(source.ids.indexOf(card) + 1)
+    .find((id) => order.includes(id));
+  const next = order
+    .filter((id) => id !== card)
+    .map((id) => (id === close ? card : id));
+  return moveToGroup(next, close, source.id, after);
+}
 // Preserve intentionally created empty targets, but remove a group that lost its last card.
 export function pruneEmptiedGroups(
   next: string[],

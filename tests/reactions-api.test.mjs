@@ -1,0 +1,16 @@
+import assert from 'node:assert/strict';
+const call = async body => { const r=await fetch('http://localhost:3000/api/game',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});return {status:r.status,...await r.json()}; };
+const a=await call({action:'create',name:'Alice'}), b=await call({action:'join',code:a.game.code,name:'Bob'});
+const seats=[{code:a.game.code,token:a.token},{code:a.game.code,token:b.token}];
+const before=(await call({...seats[0],action:'poll'})).game;
+const [sent,draw]=await Promise.all([call({...seats[1],action:'reaction',gif:'smart',reactionId:'test-on-opponent-turn'}),call({...seats[0],action:'draw'})]);
+assert.equal(sent.status,200);assert.equal(draw.status,200);
+const own=(await call({...seats[0],action:'poll'})).game, other=(await call({...seats[1],action:'poll'})).game;
+assert.deepEqual(own.reactions,other.reactions); assert.equal(own.reactions[0].player,1);assert.equal(own.phase,'discard');assert.equal(own.players[0].hand.length,14);assert.equal(own.remaining,before.remaining-1);
+assert.deepEqual(own.history,before.history);assert.equal(own.players[1].hand.length,0,'reactions do not expose opponent hand');
+assert.equal((await call({...seats[1],action:'reaction',gif:'smart',reactionId:'test-on-opponent-turn'})).status,200,'duplicate delivery is idempotent');
+assert.equal((await call({...seats[1],action:'reaction',gif:'fire',reactionId:'rapid'})).status,429);
+assert.equal((await call({...seats[0],action:'reaction',gif:'external-url',reactionId:'bad'})).status,400);
+assert.equal((await call({code:a.game.code,token:'wrong',action:'reaction',gif:'smart',reactionId:'bad-token'})).status,403);
+assert.equal((await call({...seats[0],action:'discard',cardId:own.players[0].hand.at(-1).id})).status,200,'cards remain playable after reaction');
+console.log('PASS: reactions reach both seats, authenticate senders, preserve privacy, deduplicate/rate-limit and coexist with a concurrent draw and discard.');

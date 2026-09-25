@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import {build} from 'esbuild';
+await build({entryPoints:['lib/arrange.ts'],outfile:'work/arrange-swap.mjs',bundle:true,platform:'node',format:'esm'});
+const {swapIntoClose,DISCARD_GROUP,splitGroups,moveToGroup}=await import('../work/arrange-swap.mjs');
+const original=['~group:a','a','b','c','~group:b','d',DISCARD_GROUP,'x'];
+const preview=moveToGroup(original,'b','~group:b',undefined,['~group:a','~group:b']);
+const result=swapIntoClose(preview,'b',original);
+assert.deepEqual(splitGroups(result).map(g=>g.ids),[['a','x','c'],['d'],['b']]);
+assert.deepEqual(result.filter(x=>!x.startsWith('~')).sort(),['a','b','c','d','x']);
+assert.deepEqual(swapIntoClose(result,'b',result),result,'dragging the close card back to itself is a no-op');
+const one=['~group:a','a',DISCARD_GROUP,'x'];
+assert.deepEqual(swapIntoClose(one,'a',one),['~group:a','x',DISCARD_GROUP,'a']);
+console.log('PASS: Close Card swaps into the original exact position after cross-group previews, preserves all cards, and handles single-card source groups.');
